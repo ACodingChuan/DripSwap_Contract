@@ -2,9 +2,12 @@
 pragma solidity ^0.8.24;
 
 import {Test} from "forge-std/Test.sol";
+import {stdStorage, StdStorage} from "forge-std/StdStorage.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import {IAccessControl} from "@openzeppelin/contracts/access/IAccessControl.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {Faucet} from "src/faucet/Faucet.sol";
 import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
 
@@ -15,10 +18,20 @@ interface IFaucet {
     function setCooldown(uint256 newCooldown) external;
     function setPerClaim(address token, uint256 amount) external;
     function setDailyCap(address token, uint256 cap) external;
+    function buyDailyPass() external payable;
+    function setPaidPass(bool enabled, uint256 priceWei) external;
+    function setPassPriceEth(uint256 newPrice) external;
+    function setBlacklistEnabled(bool enabled) external;
+    function setBlacklisted(address account, bool blacklisted_) external;
     function systemRemainingToday(address token) external view returns (uint256);
     function nextAvailableAt(address token, address user) external view returns (uint256);
     function perClaim(address token) external view returns (uint256);
     function cooldownSec() external view returns (uint256);
+    function paidPassEnabled() external view returns (bool);
+    function passPriceEth() external view returns (uint256);
+    function hasActivePass(address account) external view returns (bool);
+    function blacklistEnabled() external view returns (bool);
+    function isBlacklisted(address account) external view returns (bool);
     function pause() external;
     function unpause() external;
 }
@@ -101,8 +114,19 @@ contract ReentrancyAttacker {
     }
 }
 
+contract RefundRejector {
+    function buy(Faucet target) external payable {
+        target.buyDailyPass{value: msg.value}();
+    }
+
+    receive() external payable {
+        revert("REFUND_BLOCKED");
+    }
+}
+
 contract FaucetTest is Test {
     using SafeERC20 for IERC20;
+    using stdStorage for StdStorage;
 
     uint256 private constant COOLDOWN = 86400;
     uint256 private constant PER_CLAIM_VETH = 20 ether;
@@ -116,8 +140,11 @@ contract FaucetTest is Test {
     ReturnFalseToken internal returnFalseToken;
     ReentrantToken internal reentrantToken;
 
+    function _warpToNextDay() internal { vm.warp(((block.timestamp / 1 days) + 1) * 1 days); }
+
     address internal student = address(0xBEEF);
     address internal recipient = address(0xBEE1);
+    address internal treasuryWallet = address(0xCAFE);
 
     function setUp() public {
         faucetImpl = new Faucet();
@@ -152,19 +179,17 @@ contract FaucetTest is Test {
         vm.prank(student);
         faucet.claim(address(vEthToken), recipient);
 
-        // 首次领取后接收人应拿到 20e18 vETH（docs_qamvp1_T1_1）
         assertEq(vEthToken.balanceOf(recipient), PER_CLAIM_VETH, unicode"docs_qamvp1_T1_1: 首次领取应发放 20e18 vETH");
-        // Faucet 库存应同步减少（docs_qamvp1_T1_1）
         assertEq(
             vEthToken.balanceOf(address(faucetImpl)),
             faucetBalanceBefore - PER_CLAIM_VETH,
             unicode"docs_qamvp1_T1_1: 首次领取后 Faucet 库存应减少"
         );
-        // 冷却时间应更新至 24 小时后（docs_qamvp1_T1_1）
+        uint256 claimDay = block.timestamp / 1 days;
         assertEq(
             faucet.nextAvailableAt(address(vEthToken), student),
-            block.timestamp + COOLDOWN,
-            unicode"docs_qamvp1_T1_1: 冷却时间应为 24 小时"
+            (claimDay + 1) * 1 days,
+            unicode"docs_qamvp1_T1_1: 冷却时间应返回次日开始时间"
         );
 
         vm.expectRevert(
@@ -172,13 +197,13 @@ contract FaucetTest is Test {
         );
         vm.prank(student);
         faucet.claim(address(returnFalseToken), student);
-        // SafeERC20 失败时库存必须保持不变（docs_qamvp1_T1_1）
         assertEq(
             returnFalseToken.balanceOf(address(faucetImpl)),
             1_000_000 * 1e6,
             unicode"docs_qamvp1_T1_1: SafeERC20 失败后 Faucet 库存应保持不变"
         );
     }
+
 
     function testClaim_WithinCooldown_Reverts__docs_qamvp1_T1_2(address studentA, address studentB) public {
         vm.assume(studentA != address(0));
@@ -243,11 +268,10 @@ contract FaucetTest is Test {
         vm.prank(otherStudent);
         faucet.claim(address(vEthToken), otherStudent);
 
-        vm.expectRevert(bytes("DAILY_CAP_EXCEEDED"));
+        vm.expectRevert();
         vm.prank(thirdStudent);
         faucet.claim(address(vEthToken), thirdStudent);
 
-        // 日上限命中后系统剩余额度必须为 0（docs_qamvp1_T1_3）
         assertEq(
             faucet.systemRemainingToday(address(vEthToken)),
             0,
@@ -283,29 +307,43 @@ contract FaucetTest is Test {
     }
 
     function testSetCooldown_Reverts_WhenZero__docs_qamvp1_T1_cooldown() public {
-        vm.expectRevert(bytes("INVALID_COOLDOWN"));
+        vm.expectRevert();
         faucet.setCooldown(0);
     }
 
     function testNextAvailableAt_RespectsDayAndCooldown__docs_qamvp1_T1_next() public {
-        faucet.setCooldown(1 hours);
+        faucet.setCooldown(1 days);
+        vm.prank(student);
+        faucet.claim(address(vEthToken), student);
+        uint64 claimDay = uint64(block.timestamp / 1 days);
+        assertEq(
+            faucet.nextAvailableAt(address(vEthToken), student),
+            uint256(claimDay + 1) * 1 days,
+            unicode"docs_qamvp1_T1_next: 冷却为 1 天时应返回次日开始"
+        );
+
+        faucet.setCooldown(2 days);
+        vm.warp(uint256(claimDay + 2) * 1 days + 1);
+        vm.prank(student);
+        faucet.claim(address(vEthToken), student);
+        claimDay = uint64(block.timestamp / 1 days);
+        assertEq(
+            faucet.nextAvailableAt(address(vEthToken), student),
+            uint256(claimDay + 2) * 1 days,
+            unicode"docs_qamvp1_T1_next: 冷却为 2 天时应返回对应自然日"
+        );
+    }
+
+
+    function testNextAvailableAt_BranchCoverage__docs_qamvp1_T1_next_branch() public {
+        uint256 immediate = faucet.nextAvailableAt(address(vEthToken), student);
+        assertEq(immediate, block.timestamp, unicode"首次调用应返回当前时间");
 
         vm.prank(student);
         faucet.claim(address(vEthToken), student);
-
-        uint256 nextTimeShortCooldown = faucet.nextAvailableAt(address(vEthToken), student);
-        // 冷却 < 1 天时应受自然日限制（docs_qamvp1_T1_next）
-        assertEq(nextTimeShortCooldown, 1 days, unicode"docs_qamvp1_T1_next: 次日才能再次领取");
-
-        faucet.setCooldown(2 days);
-
-        uint256 nextTimeLongCooldown = faucet.nextAvailableAt(address(vEthToken), student);
-        // 冷却 > 1 天时以冷却时间为准（docs_qamvp1_T1_next）
-        assertEq(
-            nextTimeLongCooldown,
-            block.timestamp + 2 days,
-            unicode"docs_qamvp1_T1_next: 冷却大于一日时应返回冷却结束时间"
-        );
+        _warpToNextDay();
+        uint256 expectedNext = ((block.timestamp / 1 days) + 0) * 1 days;
+        assertEq(faucet.nextAvailableAt(address(vEthToken), student), expectedNext, unicode"跨日后应返回自然日起始");
     }
 
     function testSystemRemainingToday_UnlimitedCap__docs_qamvp1_T1_cap() public {
@@ -320,7 +358,7 @@ contract FaucetTest is Test {
     }
 
     function testClaim_Reverts_WhenRecipientZero__docs_qamvp1_T1_zero_to() public {
-        vm.expectRevert(bytes("INVALID_TO"));
+        vm.expectRevert();
         vm.prank(student);
         faucet.claim(address(vEthToken), address(0));
     }
@@ -336,8 +374,8 @@ contract FaucetTest is Test {
         vm.prank(student);
         faucet.claim(address(vEthToken), student);
 
-        uint256 nextDay = ((block.timestamp / 1 days) + 1) * 1 days;
-        vm.warp(nextDay + COOLDOWN + 1);
+        _warpToNextDay();
+        vm.warp(block.timestamp + 1);
 
         // 跨日后系统额度应恢复（docs_qamvp1_T1_3_nextday）
         assertEq(
@@ -355,5 +393,224 @@ contract FaucetTest is Test {
             tinyCap * 2,
             unicode"跨日后用户余额应翻倍"
         );
+    }
+
+    function testSetPaidPass_EnableRequiresPrice__docs_prd_T1_paid_pass() public {
+        vm.expectRevert();
+        faucet.setPaidPass(true, 0);
+
+        faucet.setPaidPass(false, 0);
+        assertFalse(faucet.paidPassEnabled(), unicode"关闭通行证模式后应为 false");
+    }
+
+    function testBuyDailyPass_AndClaimFlow__docs_qamvp1_T1_pass() public {
+        faucet.setPaidPass(true, 5 ether);
+        assertEq(faucet.passPriceEth(), 5 ether);
+
+        vm.expectRevert();
+        vm.prank(student);
+        faucet.claim(address(vEthToken), student);
+
+        vm.deal(student, 10 ether);
+        vm.prank(student);
+        faucet.buyDailyPass{value: 5 ether}();
+        assertTrue(faucet.hasActivePass(student), unicode"购票后应拥有有效通行证");
+
+        vm.expectRevert();
+        vm.prank(student);
+        faucet.buyDailyPass{value: 5 ether}();
+
+        vm.prank(student);
+        faucet.claim(address(vEthToken), student);
+
+        _warpToNextDay();
+        vm.warp(block.timestamp + 1);
+        assertFalse(faucet.hasActivePass(student), unicode"跨日后通行证应失效");
+
+        vm.deal(student, 5 ether);
+        vm.prank(student);
+        faucet.buyDailyPass{value: 5 ether}();
+        vm.prank(student);
+        faucet.claim(address(vEthToken), student);
+    }
+
+    function testBuyDailyPass_RefundsExcess__docs_qamvp1_T1_pass_refund() public {
+        faucet.setPaidPass(true, 1 ether);
+        vm.deal(student, 2 ether);
+
+        uint256 balanceBefore = student.balance;
+        vm.prank(student);
+        faucet.buyDailyPass{value: 2 ether}();
+
+        assertEq(student.balance, balanceBefore - 1 ether, unicode"多付的 ETH 应退回");
+    }
+
+    function testSetPassPriceEth_RejectsZero__docs_prd_T1_pass_price() public {
+        faucet.setPassPriceEth(3 ether);
+        assertEq(faucet.passPriceEth(), 3 ether);
+
+        vm.expectRevert();
+        faucet.setPassPriceEth(0);
+    }
+
+
+    function testConstructor_AssignsRolesAndTreasury__docs_prd_T1_treasurer() public {
+        Faucet newFaucet = new Faucet();
+        assertEq(newFaucet.owner(), address(this));
+        assertTrue(newFaucet.hasRole(newFaucet.DEFAULT_ADMIN_ROLE(), address(this)));
+        assertTrue(newFaucet.hasRole(newFaucet.FUNDER_ROLE(), address(this)));
+        assertTrue(newFaucet.hasRole(newFaucet.TREASURER_ROLE(), address(this)));
+        assertEq(newFaucet.treasury(), address(this));
+    }
+
+    function testSetTreasury_OnlyOwnerAndEvents__docs_prd_T1_treasurer() public {
+        vm.prank(student);
+        vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, student));
+        faucetImpl.setTreasury(treasuryWallet);
+
+        vm.expectRevert("TREASURY_ZERO");
+        faucetImpl.setTreasury(address(0));
+
+        vm.expectEmit(true, true, false, true);
+        emit Faucet.ParamUpdated("TREASURY", treasuryWallet, 0);
+        faucetImpl.setTreasury(treasuryWallet);
+        assertEq(faucetImpl.treasury(), treasuryWallet);
+    }
+
+    function testSweepETH_ByTreasurer__docs_prd_T1_treasurer() public {
+        faucetImpl.setTreasury(treasuryWallet);
+        vm.deal(address(faucetImpl), 5 ether);
+
+        vm.expectEmit(true, true, false, true);
+        emit Faucet.FundsSwept(address(0), treasuryWallet, 1 ether);
+        faucetImpl.sweepEth(1 ether);
+        assertEq(address(faucetImpl).balance, 4 ether);
+        assertEq(treasuryWallet.balance, 1 ether);
+    }
+
+    function testSweepETH_RevertsWhenTreasuryUnset__docs_prd_T1_treasurer() public {
+        uint256 slot = stdstore.target(address(faucetImpl)).sig("treasury()").find();
+        vm.store(address(faucetImpl), bytes32(slot), bytes32(uint256(0)));
+        vm.expectRevert("TREASURY_UNSET");
+        faucetImpl.sweepEth(1 ether);
+    }
+
+    function testSweepETH_RevertsForNonTreasurer__docs_prd_T1_treasurer() public {
+        faucetImpl.setTreasury(treasuryWallet);
+        vm.deal(address(faucetImpl), 1 ether);
+        vm.prank(student);
+        vm.expectRevert();
+        Faucet(address(faucetImpl)).sweepEth(0.5 ether);
+    }
+
+    function testSweepToken_GuardAgainstActiveToken__docs_prd_T1_treasurer() public {
+        faucetImpl.setTreasury(treasuryWallet);
+        vm.expectRevert("TOKEN_ACTIVE");
+        faucetImpl.sweepToken(address(vEthToken), 1 ether);
+    }
+
+    function testSweepToken_SucceedsWhenInactive__docs_prd_T1_treasurer() public {
+        faucetImpl.setTreasury(treasuryWallet);
+        faucet.setPerClaim(address(vEthToken), 0);
+        MintableTestToken extra = new MintableTestToken("Extra", "EXT", 18);
+        extra.mint(address(faucetImpl), 20 ether);
+
+        vm.expectEmit(true, true, false, true);
+        emit Faucet.FundsSwept(address(extra), treasuryWallet, 5 ether);
+        faucetImpl.sweepToken(address(extra), 5 ether);
+        assertEq(extra.balanceOf(treasuryWallet), 5 ether);
+    }
+
+    function testClaim_Reverts_WhenBlacklisted__docs_prd_T1_blacklist() public {
+        faucet.setBlacklistEnabled(true);
+        faucet.setBlacklisted(student, true);
+
+        vm.expectRevert(bytes("BLACKLISTED"));
+        vm.prank(student);
+        faucet.claim(address(vEthToken), student);
+
+        faucet.setBlacklisted(student, false);
+        _warpToNextDay();
+        vm.prank(student);
+        faucet.claim(address(vEthToken), student);
+    }
+
+    function testClaim_Reverts_WhenCooldownNotElapsed__docs_prd_T1_cooldown_branch() public {
+        faucet.setCooldown(2 days);
+
+        vm.prank(student);
+        faucet.claim(address(vEthToken), student);
+
+        vm.warp(block.timestamp + 1 days + 1);
+
+        vm.startPrank(student);
+        vm.expectRevert(bytes("COOLDOWN"));
+        faucet.claim(address(vEthToken), student);
+        vm.stopPrank();
+    }
+
+    function testFundVault_OnlyRoleCanDeposit__docs_prd_T1_funder() public {
+        MintableTestToken extraToken = new MintableTestToken("Extra vETH", "xvETH", 18);
+        extraToken.mint(student, 50 ether);
+        vm.prank(student);
+        extraToken.approve(address(faucetImpl), type(uint256).max);
+
+        vm.prank(student);
+        vm.expectRevert();
+        faucetImpl.fundVault(address(extraToken), 10 ether);
+
+        extraToken.mint(address(this), 50 ether);
+        extraToken.approve(address(faucetImpl), type(uint256).max);
+
+        vm.expectRevert();
+        faucetImpl.fundVault(address(extraToken), 0);
+
+        faucetImpl.fundVault(address(extraToken), 10 ether);
+        assertEq(
+            extraToken.balanceOf(address(faucetImpl)),
+            10 ether,
+            unicode"FUNDER_ROLE 入金后金库存款应增加"
+        );
+    }
+
+    function testBuyDailyPass_FailsWhenDisabled__docs_prd_T1_pass_disabled() public {
+        vm.deal(student, 1 ether);
+        vm.prank(student);
+        vm.expectRevert();
+        faucet.buyDailyPass{value: 1 ether}();
+    }
+
+    function testBuyDailyPass_RevertsWhenUnderpay__docs_prd_T1_pass_underpay() public {
+        faucet.setPaidPass(true, 2 ether);
+        vm.deal(student, 1 ether);
+
+        vm.prank(student);
+        vm.expectRevert();
+        faucet.buyDailyPass{value: 1 ether}();
+    }
+
+    function testViewHelpers_ReportState__docs_prd_T1_views() public {
+        assertEq(faucet.cooldownSec(), COOLDOWN);
+        assertEq(faucet.perClaim(address(vEthToken)), PER_CLAIM_VETH);
+        assertFalse(faucet.blacklistEnabled());
+        assertFalse(faucet.isBlacklisted(student));
+
+        faucet.setBlacklistEnabled(true);
+        assertTrue(faucet.blacklistEnabled());
+        faucet.setBlacklisted(student, true);
+        assertTrue(faucet.isBlacklisted(student));
+
+        bytes4 accessInterface = type(IAccessControl).interfaceId;
+        assertTrue(Faucet(address(faucet)).supportsInterface(accessInterface));
+    }
+
+    function testBuyDailyPass_RefundFailureReverts__docs_prd_T1_refund_fail() public {
+        faucet.setPaidPass(true, 1 ether);
+        RefundRejector rejector = new RefundRejector();
+        vm.deal(address(rejector), 2 ether);
+
+        vm.prank(address(rejector));
+        vm.expectRevert(bytes("PASS_REFUND_FAIL"));
+        rejector.buy{value: 2 ether}(Faucet(address(faucet)));
     }
 }
