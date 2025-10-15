@@ -1,56 +1,20 @@
 {
-  "chainId": 31337,
-  "chainName": "anvil-local",
-  "explorerBaseUrl": "http://127.0.0.1:8545",
+  "chainId": 11155111,
+  "chainName": "sepolia-fork",
   "nativeSymbol": "ETH",
-  "faucet": {
-    "address": "0x0000000000000000000000000000000000000000",
-    "passPriceWei": "5000000000000000000",
-    "treasury": "0x0000000000000000000000000000000000000000",
-    "signer": "0x0000000000000000000000000000000000000000",
-    "tokenWhitelist": [
-      "vETH",
-      "vUSDT"
-    ],
-    "tokenDailyCap": {
-      "vETH": "20000000000000000000000",
-      "vUSDT": "5000000000000"
-    }
-  },
-  "tokens": {
-    "vETH": {
-      "address": "0x0000000000000000000000000000000000000000",
-      "decimals": 18
-    },
-    "vUSDT": {
-      "address": "0x0000000000000000000000000000000000000000",
-      "decimals": 6
-    }
-  },
-  "uniswap": {
-    "factory": "0x0000000000000000000000000000000000000000",
-    "router": "0x0000000000000000000000000000000000000000",
-    "pair": "0x0000000000000000000000000000000000000000",
-    "weth": "0x0000000000000000000000000000000000000000",
-    "anchorPriceE18": "2000000000000000000000",
-    "seedEth": "100000000000000000000"
-  },
-  "oracle": {
-    "chainlinkFeed": "0x0000000000000000000000000000000000000000",
-    "anchorPriceE18": "2000000000000000000000",
-    "updatedAt": 0
-  },
+  "explorerBaseUrl": "https://sepolia.etherscan.io",
+  "tokens": {},
+  "v2": { "factory": "", "router": "", "weth": "", "pairs": {} },
+  "oracle": { "router": "", "feeds": {} },
   "guard": {
-    "address": "0x0000000000000000000000000000000000000000",
-    "thresholdBps": 4000,
-    "staleThreshold": 3600,
-    "mode": 0,
-    "oracle": "0x0000000000000000000000000000000000000000"
+    "address": "",
+    "defaults": {"hardBps":300,"hardBpsFixed":500,"staleSec":600},
+    "pairOverrides": {}
   },
   "meta": {
-    "deployer": "0x0000000000000000000000000000000000000000",
+    "deployer": "",
+    "saltNamespace": "dex-mvp1",
     "version": "local.m1",
-    "deployedAt": 0,
-    "notes": "Run script/BootstrapLocal.s.sol with CHAINLINK_FEED env to populate actual values."
+    "deployedAt": 0
   }
 }

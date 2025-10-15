@@ -1,0 +1,7 @@
+{
+  "defaults": { "hardBps": 300, "hardBpsFixed": 500, "staleSec": 600 },
+  "overrideKeys": ["vETH_vUSDT"],
+  "overrides": {
+    "vETH_vUSDT": { "enabled": 1, "hardBps": 250, "staleSec": 600 }
+  }
+}
