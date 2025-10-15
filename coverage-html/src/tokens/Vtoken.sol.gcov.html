@@ -1,0 +1,107 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+
+<html lang="en">
+
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+  <title>LCOV - lcov.info - src/tokens/Vtoken.sol</title>
+  <link rel="stylesheet" type="text/css" href="../../gcov.css">
+</head>
+
+<body>
+
+          <table width="100%" border=0 cellspacing=0 cellpadding=0>
+            <tr><td class="title">LCOV - code coverage report</td></tr>
+            <tr><td class="ruler"><img src="../../glass.png" width=3 height=3 alt=""></td></tr>
+
+            <tr>
+              <td width="100%">
+                <table cellpadding=1 border=0 width="100%">
+          <tr>
+            <td width="10%" class="headerItem">Current view:</td>
+            <td width="10%" class="headerValue"><a href="../../index.html" title="Click to go to top-level">top level</a> - <a href="index.html" title="Click to go to directory src/tokens">src/tokens</a> - Vtoken.sol<span style="font-size: 80%;"> (source / <a href="Vtoken.sol.func-c.html" title="Click to go to function table">functions</a>)</span></td>
+            <td width="5%"></td>
+            <td width="5%"></td>
+            <td width="5%" class="headerCovTableHead">Coverage</td>
+            <td width="5%" class="headerCovTableHead" title="Covered + Uncovered code">Total</td>
+            <td width="5%" class="headerCovTableHead" title="Exercised code only">Hit</td>
+          </tr>
+          <tr>
+            <td class="headerItem">Test:</td>
+            <td class="headerValue">lcov.info</td>
+            <td></td>
+            <td class="headerItem">Lines:</td>
+            <td class="headerCovTableEntryHi">100.0&nbsp;%</td>
+            <td class="headerCovTableEntry">6</td>
+            <td class="headerCovTableEntry">6</td>
+          </tr>
+          <tr>
+            <td class="headerItem">Test Date:</td>
+            <td class="headerValue">2025-10-15 18:49:10</td>
+            <td></td>
+            <td class="headerItem">Functions:</td>
+            <td class="headerCovTableEntryHi">100.0&nbsp;%</td>
+            <td class="headerCovTableEntry">3</td>
+            <td class="headerCovTableEntry">3</td>
+          </tr>
+                  <tr><td><img src="../../glass.png" width=3 height=3 alt=""></td></tr>
+                </table>
+              </td>
+            </tr>
+
+            <tr><td class="ruler"><img src="../../glass.png" width=3 height=3 alt=""></td></tr>
+          </table>
+
+          <table cellpadding=0 cellspacing=0 border=0>
+            <tr>
+              <td><br></td>
+            </tr>
+            <tr>
+              <td>
+<pre class="sourceHeading">            Line data    Source code</pre>
+<pre class="source">
+<span id="L1"><span class="lineNum">       1</span>              : // SPDX-License-Identifier: MIT</span>
+<span id="L2"><span class="lineNum">       2</span>              : pragma solidity ^0.8.24;</span>
+<span id="L3"><span class="lineNum">       3</span>              : </span>
+<span id="L4"><span class="lineNum">       4</span>              : import {ERC20} from &quot;@openzeppelin/contracts/token/ERC20/ERC20.sol&quot;;</span>
+<span id="L5"><span class="lineNum">       5</span>              : import {Ownable} from &quot;@openzeppelin/contracts/access/Ownable.sol&quot;;</span>
+<span id="L6"><span class="lineNum">       6</span>              : </span>
+<span id="L7"><span class="lineNum">       7</span>              : /// @title VToken - 简单可铸造的 ERC20（自定义小数位）</span>
+<span id="L8"><span class="lineNum">       8</span>              : /// @dev 仅 owner 可铸造；用于本地/测试网络模拟 vUSDT/vETH 等。</span>
+<span id="L9"><span class="lineNum">       9</span>              : contract VToken is ERC20, Ownable {</span>
+<span id="L10"><span class="lineNum">      10</span>              :     uint8 private immutable _dec;</span>
+<span id="L11"><span class="lineNum">      11</span>              : </span>
+<span id="L12"><span class="lineNum">      12</span>              :     /// @param name_  代币名（如 &quot;vUSDT&quot;）</span>
+<span id="L13"><span class="lineNum">      13</span>              :     /// @param symbol_ 代币符号（如 &quot;vUSDT&quot;）</span>
+<span id="L14"><span class="lineNum">      14</span>              :     /// @param decimals_ 小数位（USDT/USDC=6，WBTC=8，其余=18）</span>
+<span id="L15"><span class="lineNum">      15</span>              :     /// @param initialOwner 初始所有者（将拥有 mint 权限）</span>
+<span id="L16"><span class="lineNum">      16</span> <span class="tlaGNC">           6 :     constructor(string memory name_, string memory symbol_, uint8 decimals_, address initialOwner)</span></span>
+<span id="L17"><span class="lineNum">      17</span>              :         ERC20(name_, symbol_)</span>
+<span id="L18"><span class="lineNum">      18</span>              :         Ownable(initialOwner)</span>
+<span id="L19"><span class="lineNum">      19</span>              :     {</span>
+<span id="L20"><span class="lineNum">      20</span> <span class="tlaGNC">           6 :         _dec = decimals_;</span></span>
+<span id="L21"><span class="lineNum">      21</span>              :     }</span>
+<span id="L22"><span class="lineNum">      22</span>              : </span>
+<span id="L23"><span class="lineNum">      23</span> <span class="tlaGNC">           3 :     function decimals() public view override returns (uint8) {</span></span>
+<span id="L24"><span class="lineNum">      24</span> <span class="tlaGNC">           3 :         return _dec;</span></span>
+<span id="L25"><span class="lineNum">      25</span>              :     }</span>
+<span id="L26"><span class="lineNum">      26</span>              : </span>
+<span id="L27"><span class="lineNum">      27</span>              :     /// @notice 仅 owner 可铸造</span>
+<span id="L28"><span class="lineNum">      28</span> <span class="tlaGNC">         264 :     function mint(address to, uint256 amount) external onlyOwner {</span></span>
+<span id="L29"><span class="lineNum">      29</span> <span class="tlaGNC">           5 :         _mint(to, amount);</span></span>
+<span id="L30"><span class="lineNum">      30</span>              :     }</span>
+<span id="L31"><span class="lineNum">      31</span>              : }</span>
+        </pre>
+              </td>
+            </tr>
+          </table>
+          <br>
+
+          <table width="100%" border=0 cellspacing=0 cellpadding=0>
+            <tr><td class="ruler"><img src="../../glass.png" width=3 height=3 alt=""></td></tr>
+            <tr><td class="versionInfo">Generated by: <a href="https://github.com//linux-test-project/lcov" target="_parent">LCOV version 2.3.2-1</a></td></tr>
+          </table>
+          <br>
+
+</body>
+</html>

@@ -1,0 +1,359 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+
+<html lang="en">
+
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+  <title>LCOV - lcov.info - src/guard/GuardedRouter.sol</title>
+  <link rel="stylesheet" type="text/css" href="../../gcov.css">
+</head>
+
+<body>
+
+          <table width="100%" border=0 cellspacing=0 cellpadding=0>
+            <tr><td class="title">LCOV - code coverage report</td></tr>
+            <tr><td class="ruler"><img src="../../glass.png" width=3 height=3 alt=""></td></tr>
+
+            <tr>
+              <td width="100%">
+                <table cellpadding=1 border=0 width="100%">
+          <tr>
+            <td width="10%" class="headerItem">Current view:</td>
+            <td width="10%" class="headerValue"><a href="../../index.html" title="Click to go to top-level">top level</a> - <a href="index.html" title="Click to go to directory src/guard">src/guard</a> - GuardedRouter.sol<span style="font-size: 80%;"> (source / <a href="GuardedRouter.sol.func-c.html" title="Click to go to function table">functions</a>)</span></td>
+            <td width="5%"></td>
+            <td width="5%"></td>
+            <td width="5%" class="headerCovTableHead">Coverage</td>
+            <td width="5%" class="headerCovTableHead" title="Covered + Uncovered code">Total</td>
+            <td width="5%" class="headerCovTableHead" title="Exercised code only">Hit</td>
+          </tr>
+          <tr>
+            <td class="headerItem">Test:</td>
+            <td class="headerValue">lcov.info</td>
+            <td></td>
+            <td class="headerItem">Lines:</td>
+            <td class="headerCovTableEntryHi">97.1&nbsp;%</td>
+            <td class="headerCovTableEntry">104</td>
+            <td class="headerCovTableEntry">101</td>
+          </tr>
+          <tr>
+            <td class="headerItem">Test Date:</td>
+            <td class="headerValue">2025-10-15 18:49:10</td>
+            <td></td>
+            <td class="headerItem">Functions:</td>
+            <td class="headerCovTableEntryHi">100.0&nbsp;%</td>
+            <td class="headerCovTableEntry">15</td>
+            <td class="headerCovTableEntry">15</td>
+          </tr>
+                  <tr><td><img src="../../glass.png" width=3 height=3 alt=""></td></tr>
+                </table>
+              </td>
+            </tr>
+
+            <tr><td class="ruler"><img src="../../glass.png" width=3 height=3 alt=""></td></tr>
+          </table>
+
+          <table cellpadding=0 cellspacing=0 border=0>
+            <tr>
+              <td><br></td>
+            </tr>
+            <tr>
+              <td>
+<pre class="sourceHeading">            Line data    Source code</pre>
+<pre class="source">
+<span id="L1"><span class="lineNum">       1</span>              : // SPDX-License-Identifier: MIT</span>
+<span id="L2"><span class="lineNum">       2</span>              : pragma solidity ^0.8.24;</span>
+<span id="L3"><span class="lineNum">       3</span>              : </span>
+<span id="L4"><span class="lineNum">       4</span>              : import {Ownable2Step} from &quot;@openzeppelin/contracts/access/Ownable2Step.sol&quot;;</span>
+<span id="L5"><span class="lineNum">       5</span>              : import {Ownable} from &quot;@openzeppelin/contracts/access/Ownable.sol&quot;;</span>
+<span id="L6"><span class="lineNum">       6</span>              : import {IOracleRouter} from &quot;src/interfaces/IOracleRouter.sol&quot;;</span>
+<span id="L7"><span class="lineNum">       7</span>              : import {IUniswapV2Factory} from &quot;src/interfaces/IUniswapV2Factory.sol&quot;;</span>
+<span id="L8"><span class="lineNum">       8</span>              : import {IUniswapV2Pair} from &quot;src/interfaces/IUniswapV2Pair.sol&quot;;</span>
+<span id="L9"><span class="lineNum">       9</span>              : </span>
+<span id="L10"><span class="lineNum">      10</span>              : /// @title GuardedRouter（软约束版，仅视图预检，不代理交易/不托管资产）</span>
+<span id="L11"><span class="lineNum">      11</span>              : /// @notice 提供对单跳 V2 交易的“价格偏离 / 预言机过期”检查，前端用 eth_call 调用；</span>
+<span id="L12"><span class="lineNum">      12</span>              : ///         通过后由前端/后端直接向 Router/Pair 下单。本合约不做转账、授权、路由调用。</span>
+<span id="L13"><span class="lineNum">      13</span>              : /// @dev Gas 侧重点：</span>
+<span id="L14"><span class="lineNum">      14</span>              : ///      - factory immutable（部署期少一次 SSTORE）；</span>
+<span id="L15"><span class="lineNum">      15</span>              : ///      - 全局参数 Defaults 单槽打包（2B+2B+4B）；</span>
+<span id="L16"><span class="lineNum">      16</span>              : ///      - Pair 覆盖 PairCfg 单槽打包（2B+4B+1B）；</span>
+<span id="L17"><span class="lineNum">      17</span>              : ///      - 方向归一：_oriented() 统一对齐 base→quote 储备，后续无分支；</span>
+<span id="L18"><span class="lineNum">      18</span>              : ///      - 构造不 emit；仅 set* 事件（可按需删除进一步省字节码）。</span>
+<span id="L19"><span class="lineNum">      19</span>              : contract GuardedRouter is Ownable2Step {</span>
+<span id="L20"><span class="lineNum">      20</span>              :     // ===== 自定义错误（替代 require/字符串，节省部署与运行期 gas） =====</span>
+<span id="L21"><span class="lineNum">      21</span>              :     error ZeroAddress();</span>
+<span id="L22"><span class="lineNum">      22</span>              :     error PathLength();  // path.length != 2</span>
+<span id="L23"><span class="lineNum">      23</span>              :     error PathArgs();    // 零地址或重复地址</span>
+<span id="L24"><span class="lineNum">      24</span>              : </span>
+<span id="L25"><span class="lineNum">      25</span>              :     // ===== 常量（运行期不占存储） =====</span>
+<span id="L26"><span class="lineNum">      26</span>              :     uint256 private constant FEE_NUM = 997;    // Uniswap V2 0.3% 手续费的“有效系数”</span>
+<span id="L27"><span class="lineNum">      27</span>              :     uint256 private constant FEE_DEN = 1000;</span>
+<span id="L28"><span class="lineNum">      28</span>              : </span>
+<span id="L29"><span class="lineNum">      29</span>              :     // ===== 单槽全局默认参数 =====</span>
+<span id="L30"><span class="lineNum">      30</span>              :     /// @param hardBps      正常价源下的价格偏离硬阈值（基点，10000=100%）</span>
+<span id="L31"><span class="lineNum">      31</span>              :     /// @param hardBpsFixed 任一侧为 Fixed 价源时的放宽阈值（基点）</span>
+<span id="L32"><span class="lineNum">      32</span>              :     /// @param staleSec     正常价源下的过期秒数</span>
+<span id="L33"><span class="lineNum">      33</span>              :     struct Defaults { uint16 hardBps; uint16 hardBpsFixed; uint32 staleSec; }</span>
+<span id="L34"><span class="lineNum">      34</span>              :     Defaults public defaults; // 1 槽</span>
+<span id="L35"><span class="lineNum">      35</span>              : </span>
+<span id="L36"><span class="lineNum">      36</span>              :     struct PairCfg { uint16 hardBps; uint32 staleSec; uint8 enabled; }</span>
+<span id="L37"><span class="lineNum">      37</span>              : </span>
+<span id="L38"><span class="lineNum">      38</span>              :     /// @notice 工厂地址（不可变，读便宜、部署不 SSTORE）</span>
+<span id="L39"><span class="lineNum">      39</span>              :     IUniswapV2Factory public immutable factory;</span>
+<span id="L40"><span class="lineNum">      40</span>              : </span>
+<span id="L41"><span class="lineNum">      41</span>              :     /// @notice 预言机（可热切换）</span>
+<span id="L42"><span class="lineNum">      42</span>              :     IOracleRouter public oracle; // 1 槽</span>
+<span id="L43"><span class="lineNum">      43</span>              : </span>
+<span id="L44"><span class="lineNum">      44</span>              :     /// @dev 无序对 → 覆盖配置；键为排序后 (min, max) 的哈希</span>
+<span id="L45"><span class="lineNum">      45</span>              :     mapping(bytes32 =&gt; PairCfg) public pairCfg;</span>
+<span id="L46"><span class="lineNum">      46</span>              : </span>
+<span id="L47"><span class="lineNum">      47</span>              :     // ===== 事件（可按需删除以进一步省字节码） =====</span>
+<span id="L48"><span class="lineNum">      48</span>              :     event DefaultsUpdated(uint16 hardBps, uint16 hardBpsFixed, uint32 staleSec);</span>
+<span id="L49"><span class="lineNum">      49</span>              :     event PairCfgUpdated(address indexed tokenA, address indexed tokenB, PairCfg cfg);</span>
+<span id="L50"><span class="lineNum">      50</span>              :     event OracleUpdated(address indexed newOracle);</span>
+<span id="L51"><span class="lineNum">      51</span>              : </span>
+<span id="L52"><span class="lineNum">      52</span>              :     // ===== 构造（不 emit，减少部署成本） =====</span>
+<span id="L53"><span class="lineNum">      53</span> <span class="tlaGNC">          25 :     constructor(</span></span>
+<span id="L54"><span class="lineNum">      54</span>              :         address _factory,</span>
+<span id="L55"><span class="lineNum">      55</span>              :         address _oracle,</span>
+<span id="L56"><span class="lineNum">      56</span>              :         uint16 _hardBps,</span>
+<span id="L57"><span class="lineNum">      57</span>              :         uint16 _hardBpsFixed,</span>
+<span id="L58"><span class="lineNum">      58</span>              :         uint32 _staleSec,</span>
+<span id="L59"><span class="lineNum">      59</span>              :         address initialOwner</span>
+<span id="L60"><span class="lineNum">      60</span>              :     ) Ownable(initialOwner) {</span>
+<span id="L61"><span class="lineNum">      61</span> <span class="tlaGNC">          25 :         if (_factory == address(0) || _oracle == address(0)) revert ZeroAddress();</span></span>
+<span id="L62"><span class="lineNum">      62</span> <span class="tlaGNC">          25 :         factory  = IUniswapV2Factory(_factory);     // immutable → 不写存储</span></span>
+<span id="L63"><span class="lineNum">      63</span> <span class="tlaGNC">          25 :         oracle   = IOracleRouter(_oracle);          // 1 槽</span></span>
+<span id="L64"><span class="lineNum">      64</span> <span class="tlaGNC">          25 :         defaults = Defaults(_hardBps, _hardBpsFixed, _staleSec); // 1 槽</span></span>
+<span id="L65"><span class="lineNum">      65</span>              :     }</span>
+<span id="L66"><span class="lineNum">      66</span>              : </span>
+<span id="L67"><span class="lineNum">      67</span>              :     // ===== 仅 owner 的管理入口 =====</span>
+<span id="L68"><span class="lineNum">      68</span> <span class="tlaGNC">           3 :     function setOracleRouter(address _oracle) external onlyOwner {</span></span>
+<span id="L69"><span class="lineNum">      69</span> <span class="tlaGNC">           2 :         if (_oracle == address(0)) revert ZeroAddress();</span></span>
+<span id="L70"><span class="lineNum">      70</span> <span class="tlaGNC">           1 :         oracle = IOracleRouter(_oracle);            // 非0→非0 ≈ 5k gas</span></span>
+<span id="L71"><span class="lineNum">      71</span> <span class="tlaGNC">           1 :         emit OracleUpdated(_oracle);</span></span>
+<span id="L72"><span class="lineNum">      72</span>              :     }</span>
+<span id="L73"><span class="lineNum">      73</span>              : </span>
+<span id="L74"><span class="lineNum">      74</span> <span class="tlaGNC">           3 :     function setDefaults(uint16 _hardBps, uint16 _hardBpsFixed, uint32 _staleSec) external onlyOwner {</span></span>
+<span id="L75"><span class="lineNum">      75</span> <span class="tlaGNC">           2 :         defaults = Defaults(_hardBps, _hardBpsFixed, _staleSec); // 非0→非0 ≈ 5k gas</span></span>
+<span id="L76"><span class="lineNum">      76</span> <span class="tlaGNC">           2 :         emit DefaultsUpdated(_hardBps, _hardBpsFixed, _staleSec);</span></span>
+<span id="L77"><span class="lineNum">      77</span>              :     }</span>
+<span id="L78"><span class="lineNum">      78</span>              : </span>
+<span id="L79"><span class="lineNum">      79</span>              :     /// @notice 设置/关闭某对的覆盖（cfg.enabled=0 视为不用覆盖）</span>
+<span id="L80"><span class="lineNum">      80</span> <span class="tlaGNC">           7 :     function setPairCfg(address tokenA, address tokenB, PairCfg calldata cfg) external onlyOwner {</span></span>
+<span id="L81"><span class="lineNum">      81</span> <span class="tlaGNC">           6 :         (bytes32 key, address x, address y) = _pairKeySorted(tokenA, tokenB);</span></span>
+<span id="L82"><span class="lineNum">      82</span> <span class="tlaGNC">           6 :         pairCfg[key] = cfg; // 首次写入 ≈ 20k，更新 ≈ 5k</span></span>
+<span id="L83"><span class="lineNum">      83</span> <span class="tlaGNC">           6 :         emit PairCfgUpdated(x, y, cfg);</span></span>
+<span id="L84"><span class="lineNum">      84</span>              :     }</span>
+<span id="L85"><span class="lineNum">      85</span>              : </span>
+<span id="L86"><span class="lineNum">      86</span>              :     // ===== 只读：价格快照（前端展示用） =====</span>
+<span id="L87"><span class="lineNum">      87</span>              :     /// @return dexMidE18   当前池子中价（quote/base，1e18）</span>
+<span id="L88"><span class="lineNum">      88</span>              :     /// @return oraclePxE18 预言机价（1e18）</span>
+<span id="L89"><span class="lineNum">      89</span>              :     /// @return updatedAt   预言机更新时间</span>
+<span id="L90"><span class="lineNum">      90</span>              :     /// @return stale       是否过期（Fixed 不判过期）</span>
+<span id="L91"><span class="lineNum">      91</span>              :     /// @return limitBps    本次检查使用的偏离阈值（Fixed 会放宽）</span>
+<span id="L92"><span class="lineNum">      92</span>              :     /// @return srcFixed    是否涉及 Fixed 价源（用于 UI 提示）</span>
+<span id="L93"><span class="lineNum">      93</span> <span class="tlaGNC">           3 :     function checkPriceNow(address base, address quote)</span></span>
+<span id="L94"><span class="lineNum">      94</span>              :         external</span>
+<span id="L95"><span class="lineNum">      95</span>              :         view</span>
+<span id="L96"><span class="lineNum">      96</span>              :         returns (uint256 dexMidE18, uint256 oraclePxE18, uint256 updatedAt, bool stale, uint16 limitBps, bool srcFixed)</span>
+<span id="L97"><span class="lineNum">      97</span>              :     {</span>
+<span id="L98"><span class="lineNum">      98</span> <span class="tlaGNC">           3 :         Oriented memory o = _oriented(base, quote);</span></span>
+<span id="L99"><span class="lineNum">      99</span> <span class="tlaGNC">           3 :         if (o.pair == address(0) || o.reserveBase == 0) return (0, 0, 0, true, 0, false);</span></span>
+<span id="L100"><span class="lineNum">     100</span> <span class="tlaGNC">           2 :         dexMidE18 = (uint256(o.reserveQuote) * 1e18) / uint256(o.reserveBase);</span></span>
+<span id="L101"><span class="lineNum">     101</span>              : </span>
+<span id="L102"><span class="lineNum">     102</span> <span class="tlaGNC">           2 :         (oraclePxE18, updatedAt, limitBps, stale, srcFixed) = _oracleAndPolicy(base, quote);</span></span>
+<span id="L103"><span class="lineNum">     103</span>              :     }</span>
+<span id="L104"><span class="lineNum">     104</span>              : </span>
+<span id="L105"><span class="lineNum">     105</span>              :     // ===== 只读：单跳 Exact-In 预检（软约束） =====</span>
+<span id="L106"><span class="lineNum">     106</span> <span class="tlaGNC">          17 :     function checkSwapExactIn(address[] calldata path, uint256 amountIn)</span></span>
+<span id="L107"><span class="lineNum">     107</span>              :         external</span>
+<span id="L108"><span class="lineNum">     108</span>              :         view</span>
+<span id="L109"><span class="lineNum">     109</span>              :         returns (bool ok, uint256 devBps, uint256 limitBps, bool stale, uint256 dexAfterE18, uint256 oracleE18)</span>
+<span id="L110"><span class="lineNum">     110</span>              :     {</span>
+<span id="L111"><span class="lineNum">     111</span> <span class="tlaGNC">          17 :         _validatePath2(path);</span></span>
+<span id="L112"><span class="lineNum">     112</span>              : </span>
+<span id="L113"><span class="lineNum">     113</span> <span class="tlaGNC">          14 :         (oracleE18, limitBps, stale) = _oracleAndLimit(path[0], path[1]);</span></span>
+<span id="L114"><span class="lineNum">     114</span>              :         if (stale) return (false, 0, limitBps, true, 0, oracleE18);</span>
+<span id="L115"><span class="lineNum">     115</span>              : </span>
+<span id="L116"><span class="lineNum">     116</span> <span class="tlaGNC">          12 :         (address pair, uint112 rBase, uint112 rQuote) = _orientedReserves(path[0], path[1]);</span></span>
+<span id="L117"><span class="lineNum">     117</span> <span class="tlaGNC">          12 :         if (pair == address(0) || rBase == 0) return (false, 0, limitBps, false, 0, oracleE18);</span></span>
+<span id="L118"><span class="lineNum">     118</span>              : </span>
+<span id="L119"><span class="lineNum">     119</span>              :         // out = (in*997*resOut) / (resIn*1000 + in*997)</span>
+<span id="L120"><span class="lineNum">     120</span> <span class="tlaGNC">          11 :         uint256 inWithFee = amountIn * FEE_NUM;</span></span>
+<span id="L121"><span class="lineNum">     121</span> <span class="tlaGNC">          11 :         uint256 out = (inWithFee * rQuote) / (uint256(rBase) * FEE_DEN + inWithFee);</span></span>
+<span id="L122"><span class="lineNum">     122</span>              : </span>
+<span id="L123"><span class="lineNum">     123</span>              :         // 仅为 dexAfter 计算新储备（不引入多余局部变量）</span>
+<span id="L124"><span class="lineNum">     124</span> <span class="tlaGNC">          11 :         dexAfterE18 = ((uint256(rQuote) - out) * 1e18) / (uint256(rBase) + amountIn);</span></span>
+<span id="L125"><span class="lineNum">     125</span>              : </span>
+<span id="L126"><span class="lineNum">     126</span>              :         // 直接用实际成交均价 vs 预言机价计算偏离，避免 execPxE18 变量常驻</span>
+<span id="L127"><span class="lineNum">     127</span> <span class="tlaGNC">          11 :         uint256 pxExec = (amountIn == 0) ? 0 : (out * 1e18) / amountIn;</span></span>
+<span id="L128"><span class="lineNum">     128</span> <span class="tlaGNC">          11 :         devBps = _devBps(pxExec, oracleE18);</span></span>
+<span id="L129"><span class="lineNum">     129</span> <span class="tlaGNC">          11 :         ok = (devBps &lt;= limitBps);</span></span>
+<span id="L130"><span class="lineNum">     130</span>              :     }</span>
+<span id="L131"><span class="lineNum">     131</span>              : </span>
+<span id="L132"><span class="lineNum">     132</span>              :     // ===== 只读：单跳 Exact-Out 预检（软约束） =====</span>
+<span id="L133"><span class="lineNum">     133</span> <span class="tlaGNC">           3 :     function checkSwapExactOut(address[] calldata path, uint256 amountOut)</span></span>
+<span id="L134"><span class="lineNum">     134</span>              :         external</span>
+<span id="L135"><span class="lineNum">     135</span>              :         view</span>
+<span id="L136"><span class="lineNum">     136</span>              :         returns (bool ok, uint256 devBps, uint256 limitBps, bool stale, uint256 dexAfterE18, uint256 oracleE18, uint256 amountInNeeded)</span>
+<span id="L137"><span class="lineNum">     137</span>              :     {</span>
+<span id="L138"><span class="lineNum">     138</span> <span class="tlaGNC">           3 :         _validatePath2(path);</span></span>
+<span id="L139"><span class="lineNum">     139</span>              : </span>
+<span id="L140"><span class="lineNum">     140</span> <span class="tlaGNC">           3 :         (oracleE18, limitBps, stale) = _oracleAndLimit(path[0], path[1]);</span></span>
+<span id="L141"><span class="lineNum">     141</span>              :         if (stale) return (false, 0, limitBps, true, 0, oracleE18, 0);</span>
+<span id="L142"><span class="lineNum">     142</span>              : </span>
+<span id="L143"><span class="lineNum">     143</span> <span class="tlaGNC">           2 :         (address pair, uint112 rBase, uint112 rQuote) = _orientedReserves(path[0], path[1]);</span></span>
+<span id="L144"><span class="lineNum">     144</span> <span class="tlaGNC">           2 :         if (pair == address(0) || rBase == 0 || amountOut &gt;= rQuote)</span></span>
+<span id="L145"><span class="lineNum">     145</span>              :             return (false, 0, limitBps, false, 0, oracleE18, 0);</span>
+<span id="L146"><span class="lineNum">     146</span>              : </span>
+<span id="L147"><span class="lineNum">     147</span>              :         // in = ceil(resIn*out*1000 / ((resOut - out)*997))</span>
+<span id="L148"><span class="lineNum">     148</span> <span class="tlaGNC">           1 :         uint256 num = uint256(rBase) * amountOut * FEE_DEN;</span></span>
+<span id="L149"><span class="lineNum">     149</span> <span class="tlaGNC">           1 :         uint256 den = (uint256(rQuote) - amountOut) * FEE_NUM;</span></span>
+<span id="L150"><span class="lineNum">     150</span> <span class="tlaGNC">           1 :         amountInNeeded = (num + den - 1) / den;</span></span>
+<span id="L151"><span class="lineNum">     151</span>              : </span>
+<span id="L152"><span class="lineNum">     152</span>              :         // dexAfter</span>
+<span id="L153"><span class="lineNum">     153</span> <span class="tlaGNC">           1 :         dexAfterE18 = ((uint256(rQuote) - amountOut) * 1e18) / (uint256(rBase) + amountInNeeded);</span></span>
+<span id="L154"><span class="lineNum">     154</span>              : </span>
+<span id="L155"><span class="lineNum">     155</span>              :         // 与 oracle 的偏离（使用实际成交均价，不保留中间变量）</span>
+<span id="L156"><span class="lineNum">     156</span> <span class="tlaGNC">           1 :         uint256 pxExec = (amountInNeeded == 0) ? 0 : (amountOut * 1e18) / amountInNeeded;</span></span>
+<span id="L157"><span class="lineNum">     157</span> <span class="tlaGNC">           1 :         devBps = _devBps(pxExec, oracleE18);</span></span>
+<span id="L158"><span class="lineNum">     158</span> <span class="tlaGNC">           1 :         ok = (devBps &lt;= limitBps);</span></span>
+<span id="L159"><span class="lineNum">     159</span>              :     }</span>
+<span id="L160"><span class="lineNum">     160</span>              : </span>
+<span id="L161"><span class="lineNum">     161</span>              :     // ================= 内部：策略 / 方向归一 / 工具 =================</span>
+<span id="L162"><span class="lineNum">     162</span>              : </span>
+<span id="L163"><span class="lineNum">     163</span>              :     /// @dev 读取公允价并计算“本次应使用的阈值/是否过期”</span>
+<span id="L164"><span class="lineNum">     164</span>              :     ///      - src==Fixed：不过期；阈值取 max(pairHardBps, hardBpsFixed)</span>
+<span id="L165"><span class="lineNum">     165</span>              :     ///      - UsdSplit  ：按 staleSec 判过期；阈值取 pairHardBps</span>
+<span id="L166"><span class="lineNum">     166</span> <span class="tlaGNC">           2 :     function _oracleAndPolicy(address base, address quote)</span></span>
+<span id="L167"><span class="lineNum">     167</span>              :         internal</span>
+<span id="L168"><span class="lineNum">     168</span>              :         view</span>
+<span id="L169"><span class="lineNum">     169</span>              :         returns (uint256 oracleE18, uint256 updatedAt, uint16 limitBps, bool stale, bool srcFixed)</span>
+<span id="L170"><span class="lineNum">     170</span>              :     {</span>
+<span id="L171"><span class="lineNum">     171</span> <span class="tlaGNC">           2 :         IOracleRouter.PriceSrc src;</span></span>
+<span id="L172"><span class="lineNum">     172</span> <span class="tlaGNC">           2 :         (oracleE18, updatedAt, src) = oracle.latestAnswer(base, quote);</span></span>
+<span id="L173"><span class="lineNum">     173</span>              : </span>
+<span id="L174"><span class="lineNum">     174</span> <span class="tlaGNC">           2 :         (uint16 hardBps, uint32 staleSec) = _pairPolicy(base, quote);</span></span>
+<span id="L175"><span class="lineNum">     175</span>              : </span>
+<span id="L176"><span class="lineNum">     176</span> <span class="tlaGNC">           2 :         if (src == IOracleRouter.PriceSrc.Fixed) {</span></span>
+<span id="L177"><span class="lineNum">     177</span> <span class="tlaGNC">           1 :             srcFixed = true;</span></span>
+<span id="L178"><span class="lineNum">     178</span> <span class="tlaGNC">           1 :             stale    = false;</span></span>
+<span id="L179"><span class="lineNum">     179</span> <span class="tlaGNC">           1 :             limitBps = (hardBps &gt;= defaults.hardBpsFixed) ? hardBps : defaults.hardBpsFixed;</span></span>
+<span id="L180"><span class="lineNum">     180</span>              :         } else {</span>
+<span id="L181"><span class="lineNum">     181</span> <span class="tlaGNC">           1 :             srcFixed = false;</span></span>
+<span id="L182"><span class="lineNum">     182</span> <span class="tlaGNC">           1 :             stale    = (block.timestamp - updatedAt) &gt; staleSec;</span></span>
+<span id="L183"><span class="lineNum">     183</span> <span class="tlaGNC">           1 :             limitBps = hardBps;</span></span>
+<span id="L184"><span class="lineNum">     184</span>              :         }</span>
+<span id="L185"><span class="lineNum">     185</span>              :     }</span>
+<span id="L186"><span class="lineNum">     186</span>              : </span>
+<span id="L187"><span class="lineNum">     187</span>              : </span>
+<span id="L188"><span class="lineNum">     188</span>              :         /// @dev 只拿交易需要的三项：公允价 / 偏离阈值 / 是否过期（减少一次多返回解构）</span>
+<span id="L189"><span class="lineNum">     189</span> <span class="tlaGNC">          17 :     function _oracleAndLimit(address base, address quote)</span></span>
+<span id="L190"><span class="lineNum">     190</span>              :         internal</span>
+<span id="L191"><span class="lineNum">     191</span>              :         view</span>
+<span id="L192"><span class="lineNum">     192</span>              :         returns (uint256 oracleE18, uint16 limitBps, bool stale)</span>
+<span id="L193"><span class="lineNum">     193</span>              :     {</span>
+<span id="L194"><span class="lineNum">     194</span> <span class="tlaGNC">          17 :         IOracleRouter.PriceSrc src;</span></span>
+<span id="L195"><span class="lineNum">     195</span> <span class="tlaGNC">          17 :         uint256 updatedAt;</span></span>
+<span id="L196"><span class="lineNum">     196</span> <span class="tlaGNC">          17 :         (oracleE18, updatedAt, src) = oracle.latestAnswer(base, quote);</span></span>
+<span id="L197"><span class="lineNum">     197</span>              : </span>
+<span id="L198"><span class="lineNum">     198</span> <span class="tlaGNC">          17 :         (uint16 hardBps, uint32 staleSec) = _pairPolicy(base, quote);</span></span>
+<span id="L199"><span class="lineNum">     199</span>              : </span>
+<span id="L200"><span class="lineNum">     200</span> <span class="tlaGNC">          17 :         if (src == IOracleRouter.PriceSrc.Fixed) {</span></span>
+<span id="L201"><span class="lineNum">     201</span> <span class="tlaGNC">           2 :             stale    = false;</span></span>
+<span id="L202"><span class="lineNum">     202</span> <span class="tlaGNC">           2 :             limitBps = (hardBps &gt;= defaults.hardBpsFixed) ? hardBps : defaults.hardBpsFixed;</span></span>
+<span id="L203"><span class="lineNum">     203</span>              :         } else {</span>
+<span id="L204"><span class="lineNum">     204</span> <span class="tlaGNC">          15 :             stale    = (block.timestamp - updatedAt) &gt; staleSec;</span></span>
+<span id="L205"><span class="lineNum">     205</span> <span class="tlaGNC">          15 :             limitBps = hardBps;</span></span>
+<span id="L206"><span class="lineNum">     206</span>              :         }</span>
+<span id="L207"><span class="lineNum">     207</span>              :     }</span>
+<span id="L208"><span class="lineNum">     208</span>              : </span>
+<span id="L209"><span class="lineNum">     209</span>              :     /// @dev 返回面向 base→quote 的储备，不再构造 struct，减少栈占用</span>
+<span id="L210"><span class="lineNum">     210</span> <span class="tlaGNC">          14 :     function _orientedReserves(address base, address quote)</span></span>
+<span id="L211"><span class="lineNum">     211</span>              :         internal</span>
+<span id="L212"><span class="lineNum">     212</span>              :         view</span>
+<span id="L213"><span class="lineNum">     213</span>              :         returns (address pair, uint112 rBase, uint112 rQuote)</span>
+<span id="L214"><span class="lineNum">     214</span>              :     {</span>
+<span id="L215"><span class="lineNum">     215</span> <span class="tlaGNC">          14 :         pair = factory.getPair(base, quote);</span></span>
+<span id="L216"><span class="lineNum">     216</span> <span class="tlaGNC">          14 :         if (pair == address(0)) return (address(0), 0, 0);</span></span>
+<span id="L217"><span class="lineNum">     217</span> <span class="tlaGNC">          13 :         (uint112 r0, uint112 r1,) = IUniswapV2Pair(pair).getReserves();</span></span>
+<span id="L218"><span class="lineNum">     218</span> <span class="tlaGNC">          13 :         address t0 = IUniswapV2Pair(pair).token0();</span></span>
+<span id="L219"><span class="lineNum">     219</span> <span class="tlaGNC">          13 :         if (t0 == base) {</span></span>
+<span id="L220"><span class="lineNum">     220</span> <span class="tlaGNC">          11 :             rBase = r0; rQuote = r1;</span></span>
+<span id="L221"><span class="lineNum">     221</span>              :         } else {</span>
+<span id="L222"><span class="lineNum">     222</span> <span class="tlaGNC">           2 :             rBase = r1; rQuote = r0;</span></span>
+<span id="L223"><span class="lineNum">     223</span>              :         }</span>
+<span id="L224"><span class="lineNum">     224</span>              :     }</span>
+<span id="L225"><span class="lineNum">     225</span>              : </span>
+<span id="L226"><span class="lineNum">     226</span>              : </span>
+<span id="L227"><span class="lineNum">     227</span>              :     /// @dev 方向归一：把 pair 的 (r0,r1) 变成“面向 base→quote”的 (reserveBase,reserveQuote)</span>
+<span id="L228"><span class="lineNum">     228</span>              :     struct Oriented {</span>
+<span id="L229"><span class="lineNum">     229</span>              :         address pair;</span>
+<span id="L230"><span class="lineNum">     230</span>              :         bool    baseIsT0;</span>
+<span id="L231"><span class="lineNum">     231</span>              :         uint112 reserveBase;</span>
+<span id="L232"><span class="lineNum">     232</span>              :         uint112 reserveQuote;</span>
+<span id="L233"><span class="lineNum">     233</span>              :     }</span>
+<span id="L234"><span class="lineNum">     234</span>              : </span>
+<span id="L235"><span class="lineNum">     235</span> <span class="tlaGNC">           3 :     function _oriented(address base, address quote) private view returns (Oriented memory o) {</span></span>
+<span id="L236"><span class="lineNum">     236</span> <span class="tlaGNC">           3 :         address p = factory.getPair(base, quote);</span></span>
+<span id="L237"><span class="lineNum">     237</span> <span class="tlaGNC">           3 :         if (p == address(0)) return o; // o.pair=0 代表无池</span></span>
+<span id="L238"><span class="lineNum">     238</span> <span class="tlaGNC">           2 :         (uint112 r0, uint112 r1,) = IUniswapV2Pair(p).getReserves();</span></span>
+<span id="L239"><span class="lineNum">     239</span> <span class="tlaGNC">           2 :         address t0 = IUniswapV2Pair(p).token0();</span></span>
+<span id="L240"><span class="lineNum">     240</span> <span class="tlaGNC">           2 :         o.pair = p;</span></span>
+<span id="L241"><span class="lineNum">     241</span> <span class="tlaGNC">           2 :         if (t0 == base) {</span></span>
+<span id="L242"><span class="lineNum">     242</span> <span class="tlaGNC">           2 :             o.baseIsT0     = true;</span></span>
+<span id="L243"><span class="lineNum">     243</span> <span class="tlaGNC">           2 :             o.reserveBase  = r0;</span></span>
+<span id="L244"><span class="lineNum">     244</span> <span class="tlaGNC">           2 :             o.reserveQuote = r1;</span></span>
+<span id="L245"><span class="lineNum">     245</span>              :         } else {</span>
+<span id="L246"><span class="lineNum">     246</span> <span class="tlaUNC">           0 :             o.baseIsT0     = false;</span></span>
+<span id="L247"><span class="lineNum">     247</span> <span class="tlaUNC">           0 :             o.reserveBase  = r1;</span></span>
+<span id="L248"><span class="lineNum">     248</span> <span class="tlaUNC">           0 :             o.reserveQuote = r0;</span></span>
+<span id="L249"><span class="lineNum">     249</span>              :         }</span>
+<span id="L250"><span class="lineNum">     250</span>              :     }</span>
+<span id="L251"><span class="lineNum">     251</span>              : </span>
+<span id="L252"><span class="lineNum">     252</span>              :     /// @dev 统一计算“本对使用的偏离阈值与过期阈值”（优先取覆盖；为 0 则回落到全局）</span>
+<span id="L253"><span class="lineNum">     253</span> <span class="tlaGNC">          19 :     function _pairPolicy(address a, address b) private view returns (uint16 hardBps, uint32 staleSec) {</span></span>
+<span id="L254"><span class="lineNum">     254</span> <span class="tlaGNC">          19 :         (bytes32 key,,) = _pairKeySorted(a, b);</span></span>
+<span id="L255"><span class="lineNum">     255</span> <span class="tlaGNC">          19 :         PairCfg memory cfg = pairCfg[key];</span></span>
+<span id="L256"><span class="lineNum">     256</span> <span class="tlaGNC">          19 :         if (cfg.enabled != 0) {</span></span>
+<span id="L257"><span class="lineNum">     257</span> <span class="tlaGNC">           5 :             hardBps  = (cfg.hardBps  == 0) ? defaults.hardBps  : cfg.hardBps;</span></span>
+<span id="L258"><span class="lineNum">     258</span> <span class="tlaGNC">           5 :             staleSec = (cfg.staleSec == 0) ? defaults.staleSec : cfg.staleSec;</span></span>
+<span id="L259"><span class="lineNum">     259</span>              :         } else {</span>
+<span id="L260"><span class="lineNum">     260</span> <span class="tlaGNC">          14 :             hardBps  = defaults.hardBps;</span></span>
+<span id="L261"><span class="lineNum">     261</span> <span class="tlaGNC">          14 :             staleSec = defaults.staleSec;</span></span>
+<span id="L262"><span class="lineNum">     262</span>              :         }</span>
+<span id="L263"><span class="lineNum">     263</span>              :     }</span>
+<span id="L264"><span class="lineNum">     264</span>              : </span>
+<span id="L265"><span class="lineNum">     265</span>              :     /// @dev 生成“无序对”的键：对 (a,b) 排序得到 (x=min, y=max)，并返回 key 与排序后的 x,y。</span>
+<span id="L266"><span class="lineNum">     266</span> <span class="tlaGNC">          25 :     function _pairKeySorted(address a, address b) private pure returns (bytes32 key, address x, address y) {</span></span>
+<span id="L267"><span class="lineNum">     267</span> <span class="tlaGNC">          25 :         (x, y) = a &lt; b ? (a, b) : (b, a);</span></span>
+<span id="L268"><span class="lineNum">     268</span> <span class="tlaGNC">          25 :         key = keccak256(abi.encodePacked(x, y));</span></span>
+<span id="L269"><span class="lineNum">     269</span>              :     }</span>
+<span id="L270"><span class="lineNum">     270</span>              : </span>
+<span id="L271"><span class="lineNum">     271</span>              :     /// @dev 最小校验（软约束）：只保证 path 基本合理</span>
+<span id="L272"><span class="lineNum">     272</span> <span class="tlaGNC">          20 :     function _validatePath2(address[] calldata path) private pure {</span></span>
+<span id="L273"><span class="lineNum">     273</span> <span class="tlaGNC">          20 :         if (path.length != 2) revert PathLength();</span></span>
+<span id="L274"><span class="lineNum">     274</span> <span class="tlaGNC">          19 :         if (path[0] == address(0) || path[1] == address(0) || path[0] == path[1]) revert PathArgs();</span></span>
+<span id="L275"><span class="lineNum">     275</span>              :     }</span>
+<span id="L276"><span class="lineNum">     276</span>              : </span>
+<span id="L277"><span class="lineNum">     277</span>              :     /// @dev 偏离（基点）。若任一价格为 0，直接返回最大值用于标记“不可用/不通过”。</span>
+<span id="L278"><span class="lineNum">     278</span> <span class="tlaGNC">          12 :     function _devBps(uint256 dexPxE18, uint256 oraclePxE18) private pure returns (uint256) {</span></span>
+<span id="L279"><span class="lineNum">     279</span> <span class="tlaGNC">          12 :         if (dexPxE18 == 0 || oraclePxE18 == 0) return type(uint256).max;</span></span>
+<span id="L280"><span class="lineNum">     280</span> <span class="tlaGNC">          12 :         if (dexPxE18 &gt; oraclePxE18) return ((dexPxE18 - oraclePxE18) * 10_000) / oraclePxE18;</span></span>
+<span id="L281"><span class="lineNum">     281</span> <span class="tlaGNC">          12 :         return ((oraclePxE18 - dexPxE18) * 10_000) / oraclePxE18;</span></span>
+<span id="L282"><span class="lineNum">     282</span>              :     }</span>
+<span id="L283"><span class="lineNum">     283</span>              : }</span>
+        </pre>
+              </td>
+            </tr>
+          </table>
+          <br>
+
+          <table width="100%" border=0 cellspacing=0 cellpadding=0>
+            <tr><td class="ruler"><img src="../../glass.png" width=3 height=3 alt=""></td></tr>
+            <tr><td class="versionInfo">Generated by: <a href="https://github.com//linux-test-project/lcov" target="_parent">LCOV version 2.3.2-1</a></td></tr>
+          </table>
+          <br>
+
+</body>
+</html>

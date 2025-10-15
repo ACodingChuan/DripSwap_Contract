@@ -9,8 +9,9 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
-/// @title Faucet
-/// @notice 水龙头合约：
+/// @title Faucet (Legacy)
+/// @notice 【已废弃】仅保留兼容性，新的领取逻辑请改用 `FaucetV2`。
+///  @dev 设置常量 `IS_DEPRECATED` 为 true，方便部署脚本或监控系统识别并迁移。
 ///  - 【冷却】同一用户×同一 Token：自然日仅一次 + 滚动秒级冷却（双闸）
 ///  - 【系统上限】每 Token 的“合约级每日总上限”，按自然日自动归零
 ///  - 【通行证】可选的当日通行证（付费购买，支持多付找零；退款失败则整笔回滚）
@@ -19,6 +20,8 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 ///  - 【归集】支持 sweepEth / sweepToken（仅当 Token 下线后才允许清扫，避免误扫）
 contract Faucet is Ownable2Step, AccessControl, ReentrancyGuard, Pausable {
     using SafeERC20 for IERC20;
+
+    bool public constant IS_DEPRECATED = true;
 
     // ===== 常量&角色 =====
     uint256 private constant DAY = 1 days;
