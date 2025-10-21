@@ -7,7 +7,7 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 /// @title VToken - 简单可铸造的 ERC20（自定义小数位）
 /// @dev 仅 owner 可铸造；用于本地/测试网络模拟 vUSDT/vETH 等。
 contract VToken is ERC20, Ownable {
-    uint8 private immutable _dec;
+    uint8 private immutable _DEC;
 
     /// @param name_  代币名（如 "vUSDT"）
     /// @param symbol_ 代币符号（如 "vUSDT"）
@@ -17,11 +17,11 @@ contract VToken is ERC20, Ownable {
         ERC20(name_, symbol_)
         Ownable(initialOwner)
     {
-        _dec = decimals_;
+        _DEC = decimals_;
     }
 
     function decimals() public view override returns (uint8) {
-        return _dec;
+        return _DEC;
     }
 
     /// @notice 仅 owner 可铸造

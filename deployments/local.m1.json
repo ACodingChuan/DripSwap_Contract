@@ -1,20 +1,69 @@
 {
-  "chainId": 11155111,
-  "chainName": "sepolia-fork",
-  "nativeSymbol": "ETH",
-  "explorerBaseUrl": "https://sepolia.etherscan.io",
-  "tokens": {},
-  "v2": { "factory": "", "router": "", "weth": "", "pairs": {} },
-  "oracle": { "router": "", "feeds": {} },
-  "guard": {
-    "address": "",
-    "defaults": {"hardBps":300,"hardBpsFixed":500,"staleSec":600},
-    "pairOverrides": {}
+  "chainId": 31337,
+  "factoryDeployer": "0xce0042B868300000d44A59004Da54A005ffdcf9f",
+  "v2": {
+    "factory": "0x49002ecfA4b3D41aF647254E3a3159699BD73bAD",
+    "router": "0x997911050321896b812b74354A24293646166512",
+    "weth": "0x0000000000000000000000000000000000000001",
+    "initCodeHash": "0x0d793e0bc737382e20c7a174911671209b6e833da3cb64b5c75e1940da1f1c21",
+    "pairs": {
+      "vBTC_vUSDT": "0xf9546c37974A1B88C7032c557B39871c43f9021d",
+      "vBTC_vDAI": "0xc62B081D3C3C48e7ceA5dA484aA58B63a7BEb9A9",
+      "vBTC_vUSDC": "0x1e63f0c02B2f6BaaA4084ee537Ddd768Dc15f114",
+      "vBTC_vETH": "0xE5595A20420049575163DbBAb893B1b5e92633c6",
+      "vBTC_vLINK": "0x673338D5c8882eEb8690eCaAEbA9267E024440D3",
+      "vUSDT_vDAI": "0x05be33d317b7374AFde0C781D002f69CfdFb370c",
+      "vUSDT_vUSDC": "0x81C7F2a1E0c1feAf83ADC81CFec65BFEDDA86E0b",
+      "vUSDT_vETH": "0xCc6B695B65CCd8DcAf40EEf5B51Ee696Dd225C65",
+      "vUSDT_vLINK": "0xd4fF04D50A4D7b21557c647854cd8f57d126Dd88",
+      "vDAI_vUSDC": "0x635C63922F9810440b67C4fd01d0F2A0b4E3A462",
+      "vDAI_vETH": "0xaA43c4cc3294C37452b3FCA09F55F865b589382F",
+      "vDAI_vLINK": "0xF4945eD3A00C36E56DD10D29236Ffa9E0E0f9a65",
+      "vUSDC_vETH": "0xF79870932cbAEF9316d4Fe443840447460024A2D",
+      "vUSDC_vLINK": "0x5cf077c66e7b3509efdE61EbcFCfb8C16EE04d1c",
+      "vETH_vLINK": "0xf98c8CB3cc4cc197AdDA5e2fe88267Ce58f7741e"
+    }
   },
-  "meta": {
-    "deployer": "",
-    "saltNamespace": "dex-mvp1",
-    "version": "local.m1",
-    "deployedAt": 0
+  "tokens": {
+    "vETH": {
+      "address": "0x65E878dA3Fc449d76A68Ce9D99F04370596C99F7",
+      "decimals": 18
+    },
+    "vUSDT": {
+      "address": "0x5aEF0261b35Bb924853d86b0d7f7C209D01B19bA",
+      "decimals": 6
+    },
+    "vUSDC": {
+      "address": "0xbBF8Ad4D4EaC398680BF49ceC501c5beecE62588",
+      "decimals": 6
+    },
+    "vDAI": {
+      "address": "0xE96f6F1d7A37D12560F189440C9482A2d8f76bCB",
+      "decimals": 18
+    },
+    "vBTC": {
+      "address": "0xa33Bf5Cb6BB89004a562F910dd7BF8B8aDA486B8",
+      "decimals": 8
+    },
+    "vLINK": {
+      "address": "0x5203b2Bbba4dd7cF66300D0e4d9B62e0224a33F5",
+      "decimals": 18
+    },
+    "vSCR": {
+      "address": "0x809E1FF48a8B21A1e8b70A15473D9623fc0c82A6",
+      "decimals": 18
+    }
+  },
+  "oracle": {
+    "router": "0x69C8c0bA0BD1d6Afb45D42F3f8BC1AD5DF402c5b",
+    "feeds": {}
+  },
+  "guard": {
+    "router": "0xD4a523b3580c75a3eB26c53C486B59e36C32aB57",
+    "defaults": {
+      "hardBps": 300,
+      "hardBpsFixed": 500,
+      "staleSec": 600
+    }
   }
 }

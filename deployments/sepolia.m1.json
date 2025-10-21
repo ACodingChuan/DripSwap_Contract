@@ -1,0 +1,33 @@
+{
+  "chainId": 11155111,
+  "factoryDeployer": "0xce0042B868300000d44A59004Da54A005ffdcf9f",
+  "v2": {
+    "factory": "",
+    "router": "",
+    "weth": "",
+    "initCodeHash": "",
+    "pairs": {}
+  },
+  "tokens": {
+    "vETH": { "address": "", "decimals": 18 },
+    "vUSDT": { "address": "", "decimals": 6 },
+    "vUSDC": { "address": "", "decimals": 6 },
+    "vDAI": { "address": "", "decimals": 18 },
+    "vBTC": { "address": "", "decimals": 8 },
+    "vLINK": { "address": "", "decimals": 18 },
+    "vSCR": { "address": "", "decimals": 18 }
+  },
+  "oracle": {
+    "router": "",
+    "feeds": {}
+  },
+  "guard": {
+    "router": "",
+    "defaults": {
+      "hardBps": 300,
+      "hardBpsFixed": 500,
+      "staleSec": 600
+    },
+    "pairOverrides": {}
+  }
+}

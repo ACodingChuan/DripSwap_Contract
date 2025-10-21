@@ -1,0 +1,28 @@
+{
+  "pairs": [
+    { "base": "vBTC",  "quote": "vUSDT" },
+    { "base": "vBTC",  "quote": "vDAI"  },
+    { "base": "vBTC",  "quote": "vUSDC" },
+    { "base": "vBTC",  "quote": "vETH"  },
+    { "base": "vBTC",  "quote": "vLINK" },
+
+    { "base": "vUSDT", "quote": "vDAI"  },
+    { "base": "vUSDT", "quote": "vUSDC" },
+    { "base": "vUSDT", "quote": "vETH"  },
+    { "base": "vUSDT", "quote": "vLINK" },
+
+    { "base": "vDAI",  "quote": "vUSDC" },
+    { "base": "vDAI",  "quote": "vETH"  },
+    { "base": "vDAI",  "quote": "vLINK" },
+
+    { "base": "vUSDC", "quote": "vETH"  },
+    { "base": "vUSDC", "quote": "vLINK" },
+
+    { "base": "vETH",  "quote": "vLINK" }
+  ],
+  "seedPolicy": {
+    "mode": "auto",
+    "minQuoteUsdE18": "100000000000000000000000",
+    "slippageBpsTarget": 20
+  }
+}

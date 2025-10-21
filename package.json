@@ -1,0 +1,26 @@
+{
+  "name": "dripswap-contract",
+  "version": "1.0.0",
+  "description": "DripSwap智能合约项目 - 包含自动ABI提取功能",
+  "scripts": {
+    "build": "forge build && npm run extract-abi",
+    "extract-abi": "node tools/extract-abi.js",
+    "test": "forge test",
+    "test:coverage": "forge coverage --report lcov && genhtml lcov.info --output-directory coverage-html",
+    "clean": "forge clean && rm -rf abi/*.json",
+    "fmt": "forge fmt",
+    "install:deps": "forge install"
+  },
+  "keywords": [
+    "solidity",
+    "foundry",
+    "defi",
+    "uniswap",
+    "smart-contracts"
+  ],
+  "author": "DripSwap Team",
+  "license": "MIT",
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}

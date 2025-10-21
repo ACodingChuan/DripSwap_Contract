@@ -2,3 +2,41 @@
 .bmad-core/
 .bmad-*/
 .env
+.env.*
+.idea
+.vscode
+.out
+.kiro
+.wake*
+.solhint*
+
+
+# macOS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Foundry
+cache/
+out/
+out-v2core/
+out-v2router/
+broadcast/
+AGENTS.md
+coverage-html
+# ABI files (ignored - can be regenerated from source)
+abi/
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Coverage reports
+coverage-html/
+lcov.info

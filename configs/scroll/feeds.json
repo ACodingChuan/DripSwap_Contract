@@ -1,0 +1,13 @@
+{
+  "network": "scroll-sepolia",
+  "symbols": ["vETH", "vBTC", "vLINK", "vUSDT", "vUSDC", "vDAI", "vSCR"],
+ "feeds": {
+  "vETH": { "type": "chainlink", "aggregator": "0x59F1ec1f10bD7eD9B938431086bC1D9e233ECf41", "aggDecimals": 8 },
+  "vBTC": { "type": "chainlink", "aggregator": "0x87dce67002e66C17BC0d723Fe20D736b80CAaFda", "aggDecimals": 8 },
+  "vLINK": { "type": "chainlink", "aggregator": "0xaC3E04999aEfE44D508cB3f9B972b0Ecd07c1efb", "aggDecimals": 8 },
+  "vUSDT": { "type": "chainlink", "aggregator": "0xb84a700192A78103B2dA2530D99718A2a954cE86", "aggDecimals": 8 },
+  "vUSDC": { "type": "chainlink", "aggregator": "0xFadA8b0737D4A3AE7118918B7E69E689034c0127", "aggDecimals": 8 },
+  "vDAI": { "type": "chainlink", "aggregator": "0x9388954B816B2030B003c81A779316394b3f3f11", "aggDecimals": 8 },
+  "vSCR":  { "type": "fixed", "priceE18": "168610010000000000000", "aggDecimals": 8 }
+ }
+}

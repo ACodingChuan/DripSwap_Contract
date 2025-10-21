@@ -1,0 +1,13 @@
+{
+  "network": "anvil",
+  "symbols": ["vETH", "vBTC", "vLINK", "vUSDT", "vUSDC", "vDAI", "vSCR"],
+  "feeds": {
+    "vETH":  { "type": "fixed", "priceE18": "3899250000000000000000" },
+    "vBTC":  { "type": "fixed", "priceE18": "107000000000000000000000" },
+    "vLINK": { "type": "fixed", "priceE18": "16760000000000000000" },
+    "vUSDT": { "type": "fixed", "priceE18": "1000000000000000000" },
+    "vUSDC": { "type": "fixed", "priceE18": "1000000000000000000" },
+    "vDAI":  { "type": "fixed", "priceE18": "1000000000000000000" },
+    "vSCR":  { "type": "fixed", "priceE18": "168610010000000000000" }
+  }
+}

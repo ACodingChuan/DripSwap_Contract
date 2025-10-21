@@ -43,7 +43,7 @@ import {Test} from "forge-std/Test.sol"; // Foundry 测试基类：断言、chea
 import {stdStorage, StdStorage} from "forge-std/StdStorage.sol"; // stdstore：定位并写入存储槽（高级用）
 import {FaucetV2} from "src/faucet/FaucetV2.sol"; // 被测合约
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+
 import {IAccessControl} from "@openzeppelin/contracts/access/IAccessControl.sol";
 import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
 
@@ -52,16 +52,16 @@ import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
 // - 继承 OZ 的 ERC20，额外支持自定义 decimals（很多测试场景需要 6/18 位 Token）
 // - external 函数 mint 仅供测试铸币
 contract MintableToken is ERC20 {
-    uint8 private immutable _decimals;
+    uint8 private immutable _DECIMALS;
 
     constructor(string memory name_, string memory symbol_, uint8 decimals_)
         ERC20(name_, symbol_) // 调父类构造：设定 name/symbol
     {
-        _decimals = decimals_; // 设置不可变（immutable）小数位
+        _DECIMALS = decimals_; // 设置不可变（immutable）小数位
     }
 
     function decimals() public view override returns (uint8) {
-        return _decimals;
+        return _DECIMALS;
     }
 
     function mint(address to, uint256 amount) external {

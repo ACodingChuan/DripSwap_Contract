@@ -7,10 +7,51 @@ optimizer = true
 optimizer_runs = 2000
 via_ir = true
 auto_detect_solc = true
+# 启用额外输出以便提取ABI
+extra_output = ["abi"]
+# 格式化JSON输出，使其更易读
+pretty_json = true
+post_compile = "npm run extract-abi"
 remappings = [
     "@openzeppelin=lib/openzeppelin-contracts",
     "@uniswap/v2-core=lib/v2-core",
     "@uniswap/v2-periphery=lib/v2-periphery"
 ]
+# 允许读取编译输出目录
+fs_permissions = [
+    { access = "read", path = "./out-v2core" },
+    { access = "read", path = "./out-v2router" },
+    { access = "read-write", path = "./deployments" },
+    { access = "read", path = "./configs" }
+]
+
+# ABI配置说明:
+# 使用 'make extract-abi' 或 'npm run extract-abi' 来提取ABI文件到 ./abi 目录
 
 # See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options
+
+# ===== V2 Core Profile (Solidity 0.5.16) =====
+[profile.v2core]
+src = "lib/v2-core/contracts"
+out = "out-v2core"
+libs = ["lib"]
+solc_version = "0.5.16"
+optimizer = true
+optimizer_runs = 999999
+evm_version = "istanbul"
+via_ir = false
+test = "none"
+script = "none"
+
+# ===== V2 Router Profile (Solidity 0.6.6) - 自包含版本 =====
+[profile.v2router]
+src = "contracts-v2-router"
+out = "out-v2router"
+libs = []
+solc_version = "0.6.6"
+optimizer = true
+optimizer_runs = 999999
+evm_version = "istanbul"
+via_ir = false
+test = "none"
+script = "none"

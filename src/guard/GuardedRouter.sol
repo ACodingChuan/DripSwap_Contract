@@ -36,7 +36,7 @@ contract GuardedRouter is Ownable2Step {
     struct PairCfg { uint16 hardBps; uint32 staleSec; uint8 enabled; }
 
     /// @notice 工厂地址（不可变，读便宜、部署不 SSTORE）
-    IUniswapV2Factory public immutable factory;
+    IUniswapV2Factory public immutable FACTORY;
 
     /// @notice 预言机（可热切换）
     IOracleRouter public oracle; // 1 槽
@@ -59,7 +59,7 @@ contract GuardedRouter is Ownable2Step {
         address initialOwner
     ) Ownable(initialOwner) {
         if (_factory == address(0) || _oracle == address(0)) revert ZeroAddress();
-        factory  = IUniswapV2Factory(_factory);     // immutable → 不写存储
+        FACTORY  = IUniswapV2Factory(_factory);     // immutable → 不写存储
         oracle   = IOracleRouter(_oracle);          // 1 槽
         defaults = Defaults(_hardBps, _hardBpsFixed, _staleSec); // 1 槽
     }
@@ -212,7 +212,7 @@ contract GuardedRouter is Ownable2Step {
         view
         returns (address pair, uint112 rBase, uint112 rQuote)
     {
-        pair = factory.getPair(base, quote);
+        pair = FACTORY.getPair(base, quote);
         if (pair == address(0)) return (address(0), 0, 0);
         (uint112 r0, uint112 r1,) = IUniswapV2Pair(pair).getReserves();
         address t0 = IUniswapV2Pair(pair).token0();
@@ -233,7 +233,7 @@ contract GuardedRouter is Ownable2Step {
     }
 
     function _oriented(address base, address quote) private view returns (Oriented memory o) {
-        address p = factory.getPair(base, quote);
+        address p = FACTORY.getPair(base, quote);
         if (p == address(0)) return o; // o.pair=0 代表无池
         (uint112 r0, uint112 r1,) = IUniswapV2Pair(p).getReserves();
         address t0 = IUniswapV2Pair(p).token0();

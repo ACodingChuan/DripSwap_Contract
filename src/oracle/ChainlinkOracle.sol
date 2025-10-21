@@ -37,20 +37,20 @@ contract ChainlinkOracle is IOracleRouter, Ownable2Step {
     error OracleQuoteZero(address quote);      // 组合时除数为0（应当不发生）
 
     /// @notice token->USD 价源配置（单槽：20B + 1B + 11B = 32B）
-    /// @param aggregator   Chainlink Aggregator 合约地址；为0表示无Feed，走 fixedUSDE18
+    /// @param aggregator   Chainlink Aggregator 合约地址；为0表示无Feed，走 fixedUsdE18
     /// @param aggDecimals  （可选）缓存喂价小数位；为0表示运行时读取 aggregator.decimals()
-    /// @param fixedUSDE18  固定USD价格（1e18表示1 USD）；仅 aggregator=0 时生效
+    /// @param fixedUsdE18  固定USD价格（1e18表示1 USD）；仅 aggregator=0 时生效
     struct FeedUSD {
         address aggregator;   // 20 bytes
         uint8   aggDecimals;  // 1  byte（0 表示未缓存，运行时读取）
-        uint88  fixedUSDE18;  // 11 bytes（≈ 3.09e8 USD/枚上限；测试网兜底足够）
+        uint88  fixedUsdE18;  // 11 bytes（≈ 3.09e8 USD/枚上限；测试网兜底足够）
     }
 
     /// @dev token => USD 价源映射（每个条目仅 1 个存储槽）
     mapping(address => FeedUSD) public usdFeeds;
 
     /// @notice 当某个 token 的 USD 价源被设置/更新时触发（运维可观测）
-    event USDFeedUpdated(address indexed token, address indexed aggregator, uint8 aggDecimals, uint88 fixedUSDE18);
+    event USDFeedUpdated(address indexed token, address indexed aggregator, uint8 aggDecimals, uint88 fixedUsdE18);
 
     // ================ 管理方法（仅 owner，可2步交接） ================
 
@@ -60,7 +60,7 @@ contract ChainlinkOracle is IOracleRouter, Ownable2Step {
     ///         - 本函数一次只写 1 槽（单槽结构），初始化更省 gas。
     function setUSDFeed(address token, FeedUSD calldata cfg) external onlyOwner {
         usdFeeds[token] = cfg;
-        emit USDFeedUpdated(token, cfg.aggregator, cfg.aggDecimals, cfg.fixedUSDE18);
+        emit USDFeedUpdated(token, cfg.aggregator, cfg.aggDecimals, cfg.fixedUsdE18);
     }
 
     // ================ IOracleRouter 实现 ================
@@ -78,7 +78,7 @@ contract ChainlinkOracle is IOracleRouter, Ownable2Step {
         if (f.aggregator == address(0)) {
             // 语义：1 token = fixedUSDE18 / 1e18 USD
             // 固定价理论上“不会过期”，updatedAt 返回当前块时间；Guard 会据此放宽硬阈值
-            return (uint256(f.fixedUSDE18), block.timestamp);
+            return (uint256(f.fixedUsdE18), block.timestamp);
         }
 
         // 情况B：有Chainlink喂价 → 从 aggregator 读取最新值

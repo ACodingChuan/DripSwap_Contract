@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-import "forge-std/Test.sol";
+import {Test} from "forge-std/Test.sol";
+import {stdStorage, StdStorage} from "forge-std/StdStorage.sol";
 import {ChainlinkOracle} from "src/oracle/ChainlinkOracle.sol"; // 调整为你的真实路径
 import {IOracleRouter} from "src/interfaces/IOracleRouter.sol";
 import {MockAggregatorV3} from "./Mock.sol";
@@ -39,7 +40,7 @@ contract ChainlinkOracleTest is Test {
             ChainlinkOracle.FeedUSD({
                 aggregator: address(agg8),
                 aggDecimals: 0,              // 触发运行时读取 decimals()
-                fixedUSDE18: 0
+                fixedUsdE18: 0
             })
         );
 
@@ -49,7 +50,7 @@ contract ChainlinkOracleTest is Test {
             ChainlinkOracle.FeedUSD({
                 aggregator: address(agg18),
                 aggDecimals: 18,
-                fixedUSDE18: 0
+                fixedUsdE18: 0
             })
         );
 
@@ -59,7 +60,7 @@ contract ChainlinkOracleTest is Test {
             ChainlinkOracle.FeedUSD({
                 aggregator: address(0),
                 aggDecimals: 0,
-                fixedUSDE18: uint88(1e18)
+                fixedUsdE18: uint88(1e18)
             })
         );
         vm.stopPrank();
@@ -73,7 +74,7 @@ contract ChainlinkOracleTest is Test {
         ChainlinkOracle.FeedUSD memory cfg = ChainlinkOracle.FeedUSD({
             aggregator: address(agg20),
             aggDecimals: 20,
-            fixedUSDE18: 0
+            fixedUsdE18: 0
         });
         vm.expectRevert(); // 非 owner 调用应 revert
         oracle.setUSDFeed(TOKEN_A, cfg);
@@ -86,7 +87,7 @@ contract ChainlinkOracleTest is Test {
         ChainlinkOracle.FeedUSD memory cfg = ChainlinkOracle.FeedUSD({
             aggregator: address(agg20),
             aggDecimals: 20,
-            fixedUSDE18: 0
+            fixedUsdE18: 0
         });
 
         vm.expectEmit(true, true, true, true);
@@ -134,7 +135,7 @@ contract ChainlinkOracleTest is Test {
         vm.startPrank(owner);
         oracle.setUSDFeed(
             address(0xDD01),
-            ChainlinkOracle.FeedUSD({aggregator: address(agg20), aggDecimals: 0, fixedUSDE18: 0})
+            ChainlinkOracle.FeedUSD({aggregator: address(agg20), aggDecimals: 0, fixedUsdE18: 0})
         );
         vm.stopPrank();
 
@@ -165,7 +166,7 @@ contract ChainlinkOracleTest is Test {
         vm.startPrank(owner);
         oracle.setUSDFeed(
             TOKEN_A,
-            ChainlinkOracle.FeedUSD({aggregator: address(0), aggDecimals: 0, fixedUSDE18: uint88(2e18)}) // 2 USD
+            ChainlinkOracle.FeedUSD({aggregator: address(0), aggDecimals: 0, fixedUsdE18: uint88(2e18)}) // 2 USD
         );
         vm.stopPrank();
 
@@ -210,7 +211,7 @@ contract ChainlinkOracleTest is Test {
         vm.startPrank(owner);
         oracle.setUSDFeed(
             TOKEN_C,
-            ChainlinkOracle.FeedUSD({aggregator: address(0), aggDecimals: 0, fixedUSDE18: 0})
+            ChainlinkOracle.FeedUSD({aggregator: address(0), aggDecimals: 0, fixedUsdE18: 0})
         );
         vm.stopPrank();
 
