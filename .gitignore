@@ -9,6 +9,7 @@
 .kiro
 .wake*
 .solhint*
+.codex
 
 
 # macOS
@@ -30,6 +31,8 @@ AGENTS.md
 coverage-html
 # ABI files (ignored - can be regenerated from source)
 abi/
+# Foundry dependencies (IMPORTANT: prevents indexing 6000+ files)
+lib/
 
 # Node.js
 node_modules/

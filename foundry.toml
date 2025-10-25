@@ -15,7 +15,10 @@ post_compile = "npm run extract-abi"
 remappings = [
     "@openzeppelin=lib/openzeppelin-contracts",
     "@uniswap/v2-core=lib/v2-core",
-    "@uniswap/v2-periphery=lib/v2-periphery"
+    "@uniswap/v2-periphery=lib/v2-periphery",
+    "@chainlink/contracts=lib/chainlink-brownie-contracts/contracts",
+    "@chainlink/contracts-ccip=lib/chainlink-local/lib/chainlink-ccip/contracts",
+    "@chainlink/local=lib/chainlink-local"
 ]
 # 允许读取编译输出目录
 fs_permissions = [

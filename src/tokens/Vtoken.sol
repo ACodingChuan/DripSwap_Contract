@@ -3,10 +3,15 @@ pragma solidity ^0.8.24;
 
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
+
+import {IVToken} from "src/interfaces/IVToken.sol";
 
 /// @title VToken - 简单可铸造的 ERC20（自定义小数位）
-/// @dev 仅 owner 可铸造；用于本地/测试网络模拟 vUSDT/vETH 等。
-contract VToken is ERC20, Ownable {
+/// @notice 对齐 Chainlink CCIP Burn-and-Mint Token 标准，供跨链桥接合约调用。
+contract VToken is ERC20, Ownable, AccessControl, IVToken {
+    bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
+    bytes32 public constant BURNER_ROLE = keccak256("BURNER_ROLE");
     uint8 private immutable _DEC;
 
     /// @param name_  代币名（如 "vUSDT"）
@@ -18,14 +23,58 @@ contract VToken is ERC20, Ownable {
         Ownable(initialOwner)
     {
         _DEC = decimals_;
+
+        _grantRole(DEFAULT_ADMIN_ROLE, initialOwner);
+        _grantRole(MINTER_ROLE, initialOwner);
+        _grantRole(BURNER_ROLE, initialOwner);
     }
 
-    function decimals() public view override returns (uint8) {
+    function decimals() public view override(ERC20, IVToken) returns (uint8) {
         return _DEC;
     }
 
-    /// @notice 仅 owner 可铸造
-    function mint(address to, uint256 amount) external onlyOwner {
+    function balanceOf(address account)
+        public
+        view
+        override(ERC20, IVToken)
+        returns (uint256)
+    {
+        return super.balanceOf(account);
+    }
+
+    function mint(address to, uint256 amount) external override(IVToken) onlyRole(MINTER_ROLE) {
         _mint(to, amount);
+    }
+
+    function burn(uint256 amount) external override(IVToken) {
+        _burn(_msgSender(), amount);
+    }
+
+    function bridgeBurn(address from, uint256 amount) external override(IVToken) onlyRole(BURNER_ROLE) {
+        _burn(from, amount);
+    }
+
+    function getCCIPAdmin() external view override(IVToken) returns (address) {
+        return owner();
+    }
+
+    function supportsInterface(bytes4 interfaceId)
+        public
+        view
+        override(AccessControl)
+        returns (bool)
+    {
+        return interfaceId == type(IVToken).interfaceId || super.supportsInterface(interfaceId);
+    }
+
+    /// @dev 保持 Ownable owner 与 AccessControl 默认管理员同步，便于角色管理。
+    function _transferOwnership(address newOwner) internal override {
+        address previousOwner = owner();
+        super._transferOwnership(newOwner);
+
+        if (previousOwner != newOwner) {
+            _grantRole(DEFAULT_ADMIN_ROLE, newOwner);
+            _revokeRole(DEFAULT_ADMIN_ROLE, previousOwner);
+        }
     }
 }
