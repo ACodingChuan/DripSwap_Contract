@@ -7,19 +7,34 @@ optimizer = true
 optimizer_runs = 2000
 via_ir = true
 auto_detect_solc = true
+
+# RPC 配置：增加重试和延迟以避免速率限制
+eth_rpc_url = "${RPC_URL}"
+retries = 15
+retry_delay = 8000  # 8 秒延迟
+timeout = 60000     # 60 秒超时
+# 降低并发请求数以避免速率限制
+sender = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
 # 启用额外输出以便提取ABI
 extra_output = ["abi"]
 # 格式化JSON输出，使其更易读
 pretty_json = true
 post_compile = "npm run extract-abi"
 remappings = [
+    "@openzeppelin/contracts-upgradeable/=lib/openzeppelin-contracts-upgradeable/contracts/",
+    "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/",
     "@openzeppelin=lib/openzeppelin-contracts",
     "@uniswap/v2-core=lib/v2-core",
     "@uniswap/v2-periphery=lib/v2-periphery",
+    "@chainlink/contracts/src/v0.8/shared/=lib/chainlink-brownie-contracts/contracts/src/v0.8/shared/",
+    "@chainlink/contracts/src/v0.8/vendor/openzeppelin-solidity/=lib/chainlink-brownie-contracts/contracts/src/v0.8/vendor/openzeppelin-solidity/",
+    "@chainlink/contracts/src/v0.8/ccip/=lib/chainlink-brownie-contracts/contracts/src/v0.8/ccip/",
+    "@chainlink/contracts/src/=lib/chainlink-brownie-contracts/contracts/src/",
     "@chainlink/contracts=lib/chainlink-brownie-contracts/contracts",
-    "@chainlink/contracts-ccip=lib/chainlink-local/lib/chainlink-ccip/contracts",
-    "@chainlink/local=lib/chainlink-local"
+    "@openzeppelin/contracts@4.8.3/=lib/openzeppelin-contracts/contracts/",
+    "@openzeppelin/contracts@5.0.2/=lib/openzeppelin-contracts/contracts/"
 ]
+
 # 允许读取编译输出目录
 fs_permissions = [
     { access = "read", path = "./out-v2core" },
@@ -32,6 +47,11 @@ fs_permissions = [
 # 使用 'make extract-abi' 或 'npm run extract-abi' 来提取ABI文件到 ./abi 目录
 
 # See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options
+
+# ===== Etherscan 验证配置 =====
+[etherscan]
+sepolia = { key = "${ETHERSCAN_API_KEY}" }
+scroll-sepolia = { key = "${ETHERSCAN_API_KEY}", url = "https://api-sepolia.scrollscan.com/api" }
 
 # ===== V2 Core Profile (Solidity 0.5.16) =====
 [profile.v2core]

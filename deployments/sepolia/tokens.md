@@ -1,0 +1,49 @@
+
+[token]
+  symbol: vETH
+  address: 0xE91d02E66a9152Fee1BC79c1830121F6507a4F6D
+  decimals: 18
+  owner: 0x5EEb1d4f90Ba69579C28e4DBa7f268AAFA9Fc69b
+  initial_mint: 10000000000000000000000
+
+[token]
+  symbol: vUSDT
+  address: 0xBAcDBe38Df8421d0AA90262BEB1C20d32a634fe7
+  decimals: 6
+  owner: 0x5EEb1d4f90Ba69579C28e4DBa7f268AAFA9Fc69b
+  initial_mint: 1000000000000
+
+[token]
+  symbol: vUSDC
+  address: 0x46A906fcA4487C87f0d89D2d0824EC57bdAa947D
+  decimals: 6
+  owner: 0x5EEb1d4f90Ba69579C28e4DBa7f268AAFA9Fc69b
+  initial_mint: 1000000000000
+
+[token]
+  symbol: vDAI
+  address: 0x0C156E2F45a812ad743760A88d73fB22879BC299
+  decimals: 18
+  owner: 0x5EEb1d4f90Ba69579C28e4DBa7f268AAFA9Fc69b
+  initial_mint: 1000000000000000000000000
+
+[token]
+  symbol: vBTC
+  address: 0xAeA8C2F08b10Fe1853300dF4332E462b449e19D6
+  decimals: 8
+  owner: 0x5EEb1d4f90Ba69579C28e4DBa7f268AAFA9Fc69b
+  initial_mint: 1000000000000
+
+[token]
+  symbol: vLINK
+  address: 0x1A95d5d1930b807B62B20f3cA6b2451Ffc75B454
+  decimals: 18
+  owner: 0x5EEb1d4f90Ba69579C28e4DBa7f268AAFA9Fc69b
+  initial_mint: 1000000000000000000000000
+
+[token]
+  symbol: vSCR
+  address: 0x4911Fb3923F6DA0cd4920F914991B0A742d88Bfd
+  decimals: 18
+  owner: 0x5EEb1d4f90Ba69579C28e4DBa7f268AAFA9Fc69b
+  initial_mint: 2000000000000000000000000

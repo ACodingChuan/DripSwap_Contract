@@ -1,80 +1,116 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
-import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
+import {Initializable} from "@openzeppelin/contracts/proxy/utils/Initializable.sol";
+import {ERC20Upgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
+import {ERC20PermitUpgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/ERC20PermitUpgradeable.sol";
+import {AccessControlUpgradeable} from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
+import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import {PausableUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
 
-import {IVToken} from "src/interfaces/IVToken.sol";
+/// @title VToken - CCIP Burn-Mint Pool compatible ERC20 Token (upgradeable)
+/// @notice Designed for deployment via ERC1167 minimal proxies. Only addresses granted
+///         `BRIDGE_ROLE` may mint/burn. Pausing仅影响 mint/burn，转账不受限制。
+contract VToken is
+    Initializable,
+    ERC20Upgradeable,
+    ERC20PermitUpgradeable,
+    AccessControlUpgradeable,
+    OwnableUpgradeable,
+    PausableUpgradeable
+{
+    bytes32 public constant BRIDGE_ROLE = keccak256("BRIDGE_ROLE");
+    bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
 
-/// @title VToken - 简单可铸造的 ERC20（自定义小数位）
-/// @notice 对齐 Chainlink CCIP Burn-and-Mint Token 标准，供跨链桥接合约调用。
-contract VToken is ERC20, Ownable, AccessControl, IVToken {
-    bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
-    bytes32 public constant BURNER_ROLE = keccak256("BURNER_ROLE");
-    uint8 private immutable _DEC;
+    uint8 private _tokenDecimals;
 
-    /// @param name_  代币名（如 "vUSDT"）
-    /// @param symbol_ 代币符号（如 "vUSDT"）
-    /// @param decimals_ 小数位（USDT/USDC=6，WBTC=8，其余=18）
-    /// @param initialOwner 初始所有者（将拥有 mint 权限）
-    constructor(string memory name_, string memory symbol_, uint8 decimals_, address initialOwner)
-        ERC20(name_, symbol_)
-        Ownable(initialOwner)
-    {
-        _DEC = decimals_;
+    event Minted(address indexed caller, address indexed to, uint256 amount);
+    event Burned(address indexed caller, uint256 amount);
+
+    /// @notice 初始化克隆实例
+    function initialize(
+        string memory name_,
+        string memory symbol_,
+        uint8 decimals_,
+        address initialOwner
+    ) public initializer {
+        require(initialOwner != address(0), "ZeroOwner");
+
+        __ERC20_init(name_, symbol_);
+        __ERC20Permit_init(name_);
+        __AccessControl_init();
+        __Ownable_init(initialOwner);
+        __Pausable_init();
+
+        _tokenDecimals = decimals_;
 
         _grantRole(DEFAULT_ADMIN_ROLE, initialOwner);
-        _grantRole(MINTER_ROLE, initialOwner);
-        _grantRole(BURNER_ROLE, initialOwner);
+        _grantRole(PAUSER_ROLE, initialOwner);
     }
 
-    function decimals() public view override(ERC20, IVToken) returns (uint8) {
-        return _DEC;
-    }
-
-    function balanceOf(address account)
-        public
-        view
-        override(ERC20, IVToken)
-        returns (uint256)
+    /// @notice Mint tokens (only CCIP Pool)
+    function mint(address to, uint256 amount)
+        external
+        onlyRole(BRIDGE_ROLE)
+        whenNotPaused
     {
-        return super.balanceOf(account);
-    }
-
-    function mint(address to, uint256 amount) external override(IVToken) onlyRole(MINTER_ROLE) {
         _mint(to, amount);
+        emit Minted(msg.sender, to, amount);
     }
 
-    function burn(uint256 amount) external override(IVToken) {
-        _burn(_msgSender(), amount);
+    /// @notice Burn tokens held by the caller (only CCIP Pool)
+    function burn(uint256 amount)
+        external
+        onlyRole(BRIDGE_ROLE)
+        whenNotPaused
+    {
+        _burn(msg.sender, amount);
+        emit Burned(msg.sender, amount);
     }
 
-    function bridgeBurn(address from, uint256 amount) external override(IVToken) onlyRole(BURNER_ROLE) {
-        _burn(from, amount);
+    function decimals() public view override returns (uint8) {
+        return _tokenDecimals;
     }
 
-    function getCCIPAdmin() external view override(IVToken) returns (address) {
+    /// @notice Optional helper for Chainlink CCIP pool admin discovery
+    function getCCIPAdmin() external view returns (address) {
         return owner();
     }
 
+    // --- Pause controls (only affect mint/burn) ---
+    function pause() external onlyRole(PAUSER_ROLE) {
+        _pause();
+    }
+
+    function unpause() external onlyRole(PAUSER_ROLE) {
+        _unpause();
+    }
+
+    // --- Ownership sync ---
+    function _transferOwnership(address newOwner) internal override(OwnableUpgradeable) {
+        address prev = owner();
+        super._transferOwnership(newOwner);
+        if (prev != newOwner) {
+            _grantRole(DEFAULT_ADMIN_ROLE, newOwner);
+            _revokeRole(DEFAULT_ADMIN_ROLE, prev);
+        }
+    }
+
+    // --- ERC165 / AccessControl ---
     function supportsInterface(bytes4 interfaceId)
         public
         view
-        override(AccessControl)
+        override(AccessControlUpgradeable)
         returns (bool)
     {
-        return interfaceId == type(IVToken).interfaceId || super.supportsInterface(interfaceId);
+        return super.supportsInterface(interfaceId);
     }
 
-    /// @dev 保持 Ownable owner 与 AccessControl 默认管理员同步，便于角色管理。
-    function _transferOwnership(address newOwner) internal override {
-        address previousOwner = owner();
-        super._transferOwnership(newOwner);
-
-        if (previousOwner != newOwner) {
-            _grantRole(DEFAULT_ADMIN_ROLE, newOwner);
-            _revokeRole(DEFAULT_ADMIN_ROLE, previousOwner);
-        }
+    /// @notice 便捷地授予/撤销 Bridge 角色
+    function setBridgeRole(address pool) external onlyOwner {
+        _grantRole(BRIDGE_ROLE, pool);
     }
+
+    /// @dev 兼容 upgradeable 合约的存储 gap
+    uint256[44] private __gap;
 }

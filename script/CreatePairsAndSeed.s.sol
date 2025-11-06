@@ -9,7 +9,7 @@ CreatePairsAndSeed（精简版：不做交换测试 & 不计算部署后偏差�
 - 写回 pair 地址
 ──────────────────────────────────────────────────────────────────────────────*/
 
-import {Script} from "forge-std/Script.sol";
+import {DeployBase} from "script/lib/DeployBase.s.sol";
 import {console2} from "forge-std/console2.sol";
 import {stdJson} from "forge-std/StdJson.sol";
 
@@ -20,7 +20,7 @@ import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IER
 
 import {IOracleRouter} from "src/interfaces/IOracleRouter.sol";
 
-contract CreatePairsAndSeed is Script {
+contract CreatePairsAndSeed is DeployBase {
     using stdJson for string;
 
     uint256 constant ONE_E18 = 1e18;
@@ -34,21 +34,16 @@ contract CreatePairsAndSeed is Script {
         uint256 pk = vm.envUint("DEPLOYER_PK");
         vm.startBroadcast(pk);
 
-        string memory bookPath  = _bookPath();
         string memory pairsPath = _pairsPath();
 
-        // --- 地址簿 ---
-        string memory book = vm.readFile(bookPath);
-        address factory = vm.parseAddress(book.readString(".v2.factory"));
-        address router  = vm.parseAddress(book.readString(".v2.router"));
-        address oracle  = vm.parseAddress(book.readString(".oracle.router"));
+        address factory = _bookGetAddress("v2.factory");
+        address router  = _bookGetAddress("v2.router");
+        address oracle  = _bookGetAddress("oracle.router");
 
         // --- 配置 ---
         string memory cfg = vm.readFile(pairsPath);
         bytes memory rawPairs = vm.parseJson(cfg, ".pairs");
         PairSpec[] memory pairs = abi.decode(rawPairs, (PairSpec[]));
-        string[] memory pairPaths = new string[](pairs.length);
-        string[] memory pairAddrs = new string[](pairs.length);
 
         // 以 1e18 记账的“quote 侧最小美元规模”（例如 $100 -> 1e20）
         uint256 minQuoteUsdE18 = vm.parseUint(
@@ -59,13 +54,24 @@ contract CreatePairsAndSeed is Script {
             string memory baseSym  = pairs[i].base;
             string memory quoteSym = pairs[i].quote;
 
-            address base  = _symToAddr(bookPath, baseSym);
-            address quote = _symToAddr(bookPath, quoteSym);
+            address base  = _tokenAddress(baseSym);
+            address quote = _tokenAddress(quoteSym);
 
-            // 1) 获取/创建 pair
+            // 1) 检查是否已在地址簿中记录（幂等性检查）
+            address existingPair = _bookGetAddress(string.concat("pairs.", baseSym, "_", quoteSym, ".address"));
+            if (existingPair != address(0)) {
+                console2.log(
+                    string.concat("[SKIP] pair ", baseSym, "/", quoteSym, " already seeded at ", _toHex(existingPair))
+                );
+                continue;
+            }
+
+            // 2) 获取/创建 pair
             address pair = IUniswapV2Factory(factory).getPair(base, quote);
+            bool newlyCreated = false;
             if (pair == address(0)) {
                 pair = IUniswapV2Factory(factory).createPair(base, quote);
+                newlyCreated = true;
                 console2.log(
                     string.concat("createPair ", baseSym, "/", quoteSym, " -> ", _toHex(pair))
                 );
@@ -75,19 +81,19 @@ contract CreatePairsAndSeed is Script {
                 );
             }
 
-            // 2) 读 oracle 价格（base/quote，1e18 精度）
+            // 3) 读 oracle 价格（base/quote，1e18 精度）
             (uint256 pxE18,,) = IOracleRouter(oracle).latestAnswer(base, quote);
             require(pxE18 > 0, "oracle px=0");
 
-            // 2.5) 读 quote 的 USD 价格，确保实际注入的美元规模符合预期
+            // 3.5) 读 quote 的 USD 价格，确保实际注入的美元规模符合预期
             (uint256 quoteUsdE18,) = IOracleRouter(oracle).getUSDPrice(quote);
             require(quoteUsdE18 > 0, "oracle quote usd=0");
 
-            // 3) 读取 decimals，做单位归一化
+            // 4) 读取 decimals，做单位归一化
             uint8 baseDec  = IERC20Metadata(base).decimals();
             uint8 quoteDec = IERC20Metadata(quote).decimals();
 
-            // 4) 计算首注数量（Peg 到 oracle）
+            // 5) 计算首注数量（Peg 到 oracle）
             //
             // 让 quote 侧达到配置的最小美元规模：
             // amountQuote(最小单位) = minQuoteUsdE18 * 10^quoteDec / quoteUsdE18
@@ -99,13 +105,13 @@ contract CreatePairsAndSeed is Script {
             uint256 amountBase = (amountQuote * ONE_E18 * (10 ** uint256(baseDec))) / (pxE18 * (10 ** uint256(quoteDec)));
             if (amountBase == 0) amountBase = 1; // 保底 1 个最小单位
 
-            // 5) 授权（精确授权；也可用 max，视你偏好）
+            // 6) 授权（精确授权；也可用 max，视你偏好）
             _safeApprove(base,  router, 0);
             _safeApprove(quote, router, 0);
             _safeApprove(base,  router, amountBase);
             _safeApprove(quote, router, amountQuote);
 
-            // 6) 首次注入流动性（amountAMin/amountBMin=0；生产可改为非 0 以防前置）
+            // 7) 首次注入流动性（amountAMin/amountBMin=0；生产可改为非 0 以防前置）
             IUniswapV2Router01(router).addLiquidity(
                 base,
                 quote,
@@ -117,28 +123,28 @@ contract CreatePairsAndSeed is Script {
                 block.timestamp + 600
             );
 
-            // 7) 写回地址簿（记录 pair 地址）
-            string memory pairPath = string.concat(".v2.pairs.", baseSym, "_", quoteSym);
-            pairPaths[i] = pairPath;
-            pairAddrs[i] = vm.toString(pair);
+            // 8) 写回地址簿（记录 pair 地址）
+            if (newlyCreated) {
+                string memory mdPath = _deploymentFile("pairs.md");
+                vm.writeLine(mdPath, "");
+                vm.writeLine(mdPath, "[pair]");
+                vm.writeLine(mdPath, string.concat("  base: ", baseSym));
+                vm.writeLine(mdPath, string.concat("  quote: ", quoteSym));
+                vm.writeLine(mdPath, string.concat("  pair: ", vm.toString(pair)));
+                vm.writeLine(mdPath, string.concat("  amount_base: ", vm.toString(amountBase)));
+                vm.writeLine(mdPath, string.concat("  amount_quote: ", vm.toString(amountQuote)));
+            }
+
+            _bookSetAddress(string.concat("pairs.", baseSym, "_", quoteSym, ".address"), pair);
+            _bookSetUint(string.concat("pairs.", baseSym, "_", quoteSym, ".amount_base"), amountBase);
+            _bookSetUint(string.concat("pairs.", baseSym, "_", quoteSym, ".amount_quote"), amountQuote);
         }
 
         vm.stopBroadcast();
-
-        for (uint i = 0; i < pairs.length; i++) {
-            vm.writeJson(pairAddrs[i], bookPath, pairPaths[i]);
-        }
-
-        console2.log(string.concat("AddressBook updated: ", bookPath));
+        console2.log("Address book updated (pairs)");
     }
 
     // ---------- 工具 ----------
-
-    function _symToAddr(string memory bookPath, string memory sym) internal view returns (address) {
-        string memory book = vm.readFile(bookPath);
-        string memory path = string.concat(".tokens.", sym, ".address");
-        return vm.parseAddress(book.readString(path));
-    }
 
     function _safeApprove(address token, address spender, uint256 amount) internal {
         // 简单安全授权（不少 ERC20 需要先清零再授权）
@@ -156,13 +162,6 @@ contract CreatePairsAndSeed is Script {
             str[2 + i * 2 + 1] = hexSymbols[uint8(data[i] & 0x0f)];
         }
         return string(str);
-    }
-
-    function _bookPath() internal view returns (string memory) {
-        if (block.chainid == 31337) return "deployments/local.m1.json";
-        if (block.chainid == 11155111) return "deployments/sepolia.m1.json";
-        if (block.chainid == 534351) return "deployments/scroll-sepolia.m1.json";
-        revert("CreatePairsAndSeed: unsupported chain");
     }
 
     function _pairsPath() internal view returns (string memory) {

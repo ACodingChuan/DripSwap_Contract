@@ -1,14 +1,13 @@
+# =======================================================
 # DripSwap Contract Makefile
+# =======================================================
 
-.PHONY: all install build build-v2 build-all test test-coverage clean extract-abi fmt \
-        setup-erc2470 deploy-v2 deploy-tokens deploy-oracle deploy-guard deploy-pairs \
-        deploy-all deploy-local deploy-sepolia deploy-scroll help
+.PHONY: all build test clean fmt deploy-all deploy-verify help
 
 SHELL := /bin/bash
-
-# -------------------- 环境变量加载 --------------------
 NETWORK ?= local
 
+# -------------------- 环境加载 --------------------
 ifneq (,$(wildcard .env))
   include .env
   export
@@ -19,155 +18,137 @@ ifneq (,$(wildcard .env.$(NETWORK)))
   export
 endif
 
-ifeq ($(NETWORK),local)
-  DEFAULT_RPC := http://127.0.0.1:8545
-  BOOK_PATH   := deployments/local.m1.json
-else ifeq ($(NETWORK),sepolia)
-  DEFAULT_RPC :=
-  BOOK_PATH   := deployments/sepolia.m1.json
-else ifeq ($(NETWORK),scroll)
-  DEFAULT_RPC :=
-  BOOK_PATH   := deployments/scroll-sepolia.m1.json
-else
-  $(error Unsupported NETWORK=$(NETWORK))
+# -------------------- Forge 参数 --------------------
+FORGE_COMMON_FLAGS := --rpc-url $(RPC_URL) --broadcast --force -vvvvv
+ifneq ($(strip $(DEPLOYER_PK)),)
+  FORGE_COMMON_FLAGS += --private-key $(DEPLOYER_PK)
 endif
 
-RPC_URL ?= $(DEFAULT_RPC)
+define run_script
+	@FOUNDRY_DISABLE_TERMINAL_PROMPT=1 forge script $(1) $(FORGE_COMMON_FLAGS)
+endef
 
-check-rpc = @if [ -z "$(RPC_URL)" ]; then \
-  echo "Error: RPC_URL is required. Provide it via environment variable or .env.$(NETWORK)"; exit 1; \
-fi
+define run_script_verify
+	@FOUNDRY_DISABLE_TERMINAL_PROMPT=1 forge script $(1) $(FORGE_COMMON_FLAGS) --verify --etherscan-api-key $(ETHERSCAN_API_KEY)
+endef
 
-check-deployer = @if [ -z "$(DEPLOYER_PK)" ]; then \
-  echo "Error: DEPLOYER_PK is required for broadcasting. Configure it in .env.$(NETWORK) or export it."; exit 1; \
-fi
-
-
-# 默认目标
+# -------------------- 构建 --------------------
 all: build
-
-# -------------------- 构建相关 --------------------
-
-install:
-	@echo "📦 安装Foundry依赖..."
-	forge install
 
 build:
 	@echo "🔨 编译合约..."
 	forge build
-	@echo "📄 提取ABI文件..."
+	@echo "📄 提取 ABI..."
 	npm run extract-abi
 
 build-v2:
-	@echo "🔨 编译V2合约..."
+	@echo "🔨 编译 V2 核心..."
 	./script/build-v2.sh
 
 build-all: build-v2 build
 
 test:
 	@echo "🧪 运行测试..."
-	forge test
-
-test-coverage:
-	@echo "📊 运行测试并生成覆盖率报告..."
-	forge coverage --report lcov
-	genhtml lcov.info --output-directory coverage-html
+	forge test -vvv
 
 clean:
 	@echo "🧹 清理构建文件..."
 	forge clean
 	rm -rf abi/*.json out-v2core/ out-v2router/
 
-extract-abi:
-	@echo "📄 提取ABI文件..."
-	npm run extract-abi
-
 fmt:
-	@echo "✨ 格式化代码..."
+	@echo "✨ 格式化..."
 	forge fmt
 
-
-# -------------------- 部署相关 --------------------
+# -------------------- 部署 (不验证) --------------------
 
 setup-erc2470:
-	$(call check-rpc)
-	@echo "🏭 设置ERC-2470 Singleton Factory..."
-	@rm -rf broadcast/DeployERC2470.s.sol cache/DeployERC2470.s.sol
-	@FOUNDRY_DISABLE_TERMINAL_PROMPT=1 forge script script/DeployERC2470.s.sol \
-		--rpc-url $(RPC_URL) -vv
+	@echo "🏭 确保 ERC-2470 工厂就绪..."
+	$(call run_script,script/EnsureERC2470.s.sol)
+
+deploy-logic:
+	@echo "🧱 部署逻辑合约 ($(NETWORK))"
+	$(call run_script,script/DeployLogic.s.sol)
 
 deploy-v2:
-	$(call check-rpc)
-	$(call check-deployer)
-	@echo "🚀 部署UniswapV2 Factory和Router... (NETWORK=$(NETWORK))"
-	@rm -rf broadcast/DeployV2Deterministic.s.sol cache/DeployV2Deterministic.s.sol
-	@FOUNDRY_DISABLE_TERMINAL_PROMPT=1 forge script script/DeployV2Deterministic.s.sol \
-		--broadcast --force \
-		--rpc-url $(RPC_URL) \
-		--private-key $(DEPLOYER_PK) \
-		-vv
+	@echo "🏭 部署 UniswapV2 ($(NETWORK))"
+	$(call run_script,script/DeployV2Deterministic.s.sol)
 
 deploy-tokens:
-	$(call check-rpc)
-	$(call check-deployer)
-	@echo "🪙 部署测试代币... (NETWORK=$(NETWORK))"
-	@rm -rf broadcast/DeployTokens.s.sol cache/DeployTokens.s.sol
-	@FOUNDRY_DISABLE_TERMINAL_PROMPT=1 forge script script/DeployTokens.s.sol \
-		--tc DeployTokens \
-		--broadcast --force \
-		--rpc-url $(RPC_URL) \
-		--private-key $(DEPLOYER_PK) \
-		-vv
+	@echo "🪙 部署 VToken ($(NETWORK))"
+	$(call run_script,script/DeployTokens.s.sol)
 
 deploy-oracle:
-	$(call check-rpc)
-	$(call check-deployer)
-	@echo "🔮 部署预言机路由... (NETWORK=$(NETWORK))"
-	@rm -rf broadcast/DeployOracleRouter.s.sol cache/DeployOracleRouter.s.sol
-	@FOUNDRY_DISABLE_TERMINAL_PROMPT=1 forge script script/DeployOracleRouter.s.sol \
-		--tc DeployOracleRouter \
-		--broadcast --force \
-		--rpc-url $(RPC_URL) \
-		--private-key $(DEPLOYER_PK) \
-		-vv
+	@echo "🔮 部署 Oracle ($(NETWORK))"
+	$(call run_script,script/DeployOracleRouter.s.sol)
 
 deploy-guard:
-	$(call check-rpc)
-	$(call check-deployer)
-	@echo "🛡️  部署交易保护... (NETWORK=$(NETWORK))"
-	@rm -rf broadcast/DeployGuard.s.sol cache/DeployGuard.s.sol
-	@FOUNDRY_DISABLE_TERMINAL_PROMPT=1 forge script script/DeployGuard.s.sol \
-		--broadcast --force \
-		--rpc-url $(RPC_URL) \
-		--private-key $(DEPLOYER_PK) \
-		-vv
+	@echo "🛡️  部署 Guard ($(NETWORK))"
+	$(call run_script,script/DeployGuard.s.sol)
 
 deploy-pairs:
-	$(call check-rpc)
-	$(call check-deployer)
-	@echo "💧 创建交易对并注入流动性... (NETWORK=$(NETWORK))"
-	@rm -rf broadcast/CreatePairsAndSeed.s.sol cache/CreatePairsAndSeed.s.sol
-	@FOUNDRY_DISABLE_TERMINAL_PROMPT=1 forge script script/CreatePairsAndSeed.s.sol \
-		--broadcast --force \
-		--rpc-url $(RPC_URL) \
-		--private-key $(DEPLOYER_PK) \
-		-vv
+	@echo "💧 创建交易对 ($(NETWORK))"
+	$(call run_script,script/CreatePairsAndSeed.s.sol)
 
-deploy-all: setup-erc2470 deploy-v2 deploy-tokens deploy-oracle deploy-guard deploy-pairs
-	@echo ""
+deploy-bridge:
+	@echo "🌉 部署 Bridge ($(NETWORK))"
+	$(call run_script,script/DeployBridge.s.sol)
+
+deploy-burnmint:
+	@echo "🔥 部署 BurnMint Pools ($(NETWORK))"
+	$(call run_script,script/DeployBurnMintPools.s.sol)
+
+deploy-all:
+	@$(MAKE) NETWORK=$(NETWORK) setup-erc2470
+	@$(MAKE) NETWORK=$(NETWORK) deploy-logic
+	@$(MAKE) NETWORK=$(NETWORK) deploy-v2
+	@$(MAKE) NETWORK=$(NETWORK) deploy-tokens
+	@$(MAKE) NETWORK=$(NETWORK) deploy-oracle
+	@$(MAKE) NETWORK=$(NETWORK) deploy-guard
+	@$(MAKE) NETWORK=$(NETWORK) deploy-pairs
+	@$(MAKE) NETWORK=$(NETWORK) deploy-bridge
+	@$(MAKE) NETWORK=$(NETWORK) deploy-burnmint
 	@echo "✅ $(NETWORK) 部署完成！"
-	@echo "📄 提取ABI文件..."
-	@npm run extract-abi
-	@echo ""
-	@echo "📋 部署摘要:"
-	@echo "  网络: $(NETWORK)"
-	@echo "  地址簿: $(BOOK_PATH)"
-	@echo "  ERC-2470 工厂: 0xce0042B868300000d44A59004Da54A005ffdcf9f"
-	@echo ""
-	@echo "🔍 查看详情: cat $(BOOK_PATH)"
 
-deploy-local:
-	@$(MAKE) NETWORK=local deploy-all
+# -------------------- 部署并验证 --------------------
+
+deploy-logic-verify:
+	@echo "🧱 部署并验证逻辑合约 ($(NETWORK))"
+	$(call run_script_verify,script/DeployLogic.s.sol)
+
+deploy-v2-verify:
+	@echo "🏭 部署并验证 UniswapV2 ($(NETWORK))"
+	$(call run_script_verify,script/DeployV2Deterministic.s.sol)
+
+deploy-oracle-verify:
+	@echo "🔮 部署并验证 Oracle ($(NETWORK))"
+	$(call run_script_verify,script/DeployOracleRouter.s.sol)
+
+deploy-guard-verify:
+	@echo "🛡️  部署并验证 Guard ($(NETWORK))"
+	$(call run_script_verify,script/DeployGuard.s.sol)
+
+deploy-bridge-verify:
+	@echo "🌉 部署并验证 Bridge ($(NETWORK))"
+	$(call run_script_verify,script/DeployBridge.s.sol)
+
+deploy-burnmint-verify:
+	@echo "🔥 部署并验证 BurnMint Pools ($(NETWORK))"
+	$(call run_script_verify,script/DeployBurnMintPools.s.sol)
+
+deploy-all-verify:
+	@$(MAKE) NETWORK=$(NETWORK) setup-erc2470
+	@$(MAKE) NETWORK=$(NETWORK) deploy-logic-verify
+	@$(MAKE) NETWORK=$(NETWORK) deploy-v2-verify
+	@$(MAKE) NETWORK=$(NETWORK) deploy-tokens
+	@$(MAKE) NETWORK=$(NETWORK) deploy-oracle-verify
+	@$(MAKE) NETWORK=$(NETWORK) deploy-guard-verify
+	@$(MAKE) NETWORK=$(NETWORK) deploy-pairs
+	@$(MAKE) NETWORK=$(NETWORK) deploy-bridge-verify
+	@$(MAKE) NETWORK=$(NETWORK) deploy-burnmint-verify
+	@echo "✅ $(NETWORK) 部署并验证完成！"
+
+# -------------------- 快捷命令 --------------------
 
 deploy-sepolia:
 	@$(MAKE) NETWORK=sepolia deploy-all
@@ -175,26 +156,107 @@ deploy-sepolia:
 deploy-scroll:
 	@$(MAKE) NETWORK=scroll deploy-all
 
+deploy-verify-sepolia:
+	@$(MAKE) NETWORK=sepolia deploy-all-verify
+
+deploy-verify-scroll:
+	@$(MAKE) NETWORK=scroll deploy-all-verify
+
+# -------------------- 慢速部署 (避免 429 错误) --------------------
+
+deploy-all-slow:
+	@echo "🐌 慢速部署模式 (避免 RPC 速率限制)"
+	@$(MAKE) NETWORK=$(NETWORK) setup-erc2470
+	@sleep 8
+	@$(MAKE) NETWORK=$(NETWORK) deploy-logic
+	@sleep 8
+	@$(MAKE) NETWORK=$(NETWORK) deploy-v2
+	@sleep 8
+	@$(MAKE) NETWORK=$(NETWORK) deploy-tokens
+	@sleep 8
+	@$(MAKE) NETWORK=$(NETWORK) deploy-oracle
+	@sleep 8
+	@$(MAKE) NETWORK=$(NETWORK) deploy-guard
+	@sleep 8
+	@$(MAKE) NETWORK=$(NETWORK) deploy-pairs
+	@sleep 8
+	@$(MAKE) NETWORK=$(NETWORK) deploy-bridge
+	@sleep 8
+	@$(MAKE) NETWORK=$(NETWORK) deploy-burnmint
+	@echo "✅ $(NETWORK) 慢速部署完成！"
+
+deploy-all-verify-slow:
+	@echo "🐌 慢速部署并验证模式 (避免 RPC 速率限制)"
+	@$(MAKE) NETWORK=$(NETWORK) setup-erc2470
+	@sleep 8
+	@$(MAKE) NETWORK=$(NETWORK) deploy-logic-verify
+	@sleep 8
+	@$(MAKE) NETWORK=$(NETWORK) deploy-v2-verify
+	@sleep 8
+	@$(MAKE) NETWORK=$(NETWORK) deploy-tokens
+	@sleep 8
+	@$(MAKE) NETWORK=$(NETWORK) deploy-oracle-verify
+	@sleep 8
+	@$(MAKE) NETWORK=$(NETWORK) deploy-guard-verify
+	@sleep 8
+	@$(MAKE) NETWORK=$(NETWORK) deploy-pairs
+	@sleep 8
+	@$(MAKE) NETWORK=$(NETWORK) deploy-bridge-verify
+	@sleep 8
+	@$(MAKE) NETWORK=$(NETWORK) deploy-burnmint-verify
+	@echo "✅ $(NETWORK) 慢速部署并验证完成！"
+
+deploy-slow-sepolia:
+	@$(MAKE) NETWORK=sepolia deploy-all-slow
+
+deploy-slow-scroll:
+	@$(MAKE) NETWORK=scroll deploy-all-slow
+
+deploy-verify-slow-sepolia:
+	@$(MAKE) NETWORK=sepolia deploy-all-verify-slow
+
+deploy-verify-slow-scroll:
+	@$(MAKE) NETWORK=scroll deploy-all-verify-slow
 
 # -------------------- 帮助 --------------------
 
 help:
-	@echo "DripSwap Contract - 常用命令"
+	@echo "📘 DripSwap 合约 Makefile"
 	@echo ""
-	@echo "构建相关:"
-	@echo "  make build           - 编译并更新 ABI"
-	@echo "  make build-all       - 编译 V2 + 主体合约"
-	@echo "  make test            - 运行测试"
-	@echo "  make test-coverage   - 生成覆盖率报告"
-	@echo "  make fmt             - 执行 forge fmt"
+	@echo "常用命令："
+	@echo "  make build               - 编译合约"
+	@echo "  make test                - 运行测试"
+	@echo "  make fmt                 - 格式化代码"
+	@echo "  make clean               - 清理构建文件"
 	@echo ""
-	@echo "部署流程 (需设置 NETWORK / RPC_URL / DEPLOYER_PK):"
-	@echo "  make deploy-all NETWORK=local"
-	@echo "  make deploy-all NETWORK=sepolia"
-	@echo "  make deploy-all NETWORK=scroll"
-	@echo "  (或使用快捷命令 make deploy-local / deploy-sepolia / deploy-scroll)"
+	@echo "部署命令 (不验证)："
+	@echo "  make deploy-all NETWORK=<net>  - 部署所有合约"
+	@echo "  make deploy-sepolia            - 部署到 Sepolia"
+	@echo "  make deploy-scroll             - 部署到 Scroll"
 	@echo ""
-	@echo "配置建议:"
-	@echo "  1. 在 .env 和 .env.<network> 中设置 RPC_URL、DEPLOYER_PK"
-	@echo "  2. 配置文件位于 configs/<network>/"
-	@echo "  3. 部署结果写入 deployments/<network>.m1.json"
+	@echo "部署并验证 (推荐)："
+	@echo "  make deploy-all-verify NETWORK=<net>  - 部署并验证所有合约"
+	@echo "  make deploy-verify-sepolia            - 部署并验证到 Sepolia"
+	@echo "  make deploy-verify-scroll             - 部署并验证到 Scroll"
+	@echo ""
+	@echo "慢速部署 (避免 429 错误)："
+	@echo "  make deploy-all-slow NETWORK=<net>           - 慢速部署"
+	@echo "  make deploy-all-verify-slow NETWORK=<net>    - 慢速部署并验证"
+	@echo "  make deploy-verify-slow-sepolia              - 慢速部署并验证到 Sepolia"
+	@echo "  make deploy-verify-slow-scroll               - 慢速部署并验证到 Scroll"
+	@echo ""
+	@echo "单独部署命令："
+	@echo "  make deploy-logic    NETWORK=<net>  - 部署逻辑合约"
+	@echo "  make deploy-v2       NETWORK=<net>  - 部署 UniswapV2"
+	@echo "  make deploy-oracle   NETWORK=<net>  - 部署 Oracle"
+	@echo "  make deploy-guard    NETWORK=<net>  - 部署 Guard"
+	@echo "  make deploy-bridge   NETWORK=<net>  - 部署 Bridge"
+	@echo "  make deploy-burnmint NETWORK=<net>  - 部署 BurnMint Pools"
+	@echo ""
+	@echo "说明："
+	@echo "  - VToken 代理和 Pairs 使用标准模式，Etherscan 自动识别"
+	@echo "  - 使用 deploy-all-verify 可在部署时自动验证合约"
+	@echo "  - 遇到 RPC 429 错误时使用慢速部署模式"
+	@echo "  - 需要设置 ETHERSCAN_API_KEY 环境变量"
+	@echo ""
+	@echo "当前网络: $(NETWORK)"

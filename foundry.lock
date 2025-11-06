@@ -5,6 +5,9 @@
       "rev": "5cb41fbc9b525338b6098da5ea7dd0b7e92f89e4"
     }
   },
+  "lib/chainlink-ccip": {
+    "rev": "a872697a2d66af9143fefd4caa47376e41aa8f6a"
+  },
   "lib/chainlink-local": {
     "tag": {
       "name": "v0.2.6",
@@ -15,6 +18,12 @@
     "tag": {
       "name": "v5.4.0",
       "rev": "c64a1edb67b6e3f4a15cca8909c9482ad33a02b0"
+    }
+  },
+  "lib/openzeppelin-contracts-upgradeable": {
+    "tag": {
+      "name": "v5.5.0",
+      "rev": "aa677e9d28ed78fc427ec47ba2baef2030c58e7c"
     }
   },
   "lib/v2-core": {

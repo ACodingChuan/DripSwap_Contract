@@ -1,0 +1,9 @@
+
+[guard]
+  address: 0x87b4C3B91e995888F7242A08668e4Cf6763d52Ca
+  factory: 0x6C9258026A9272368e49bBB7D0A78c17BBe284BF
+  oracle: 0x7e8F17B349fD0f6b8A89d7c0640F232E15C68Ff3
+  hard_bps: 300
+  hard_bps_fixed: 500
+  stale_sec: 600
+  owner: 0x5EEb1d4f90Ba69579C28e4DBa7f268AAFA9Fc69b
