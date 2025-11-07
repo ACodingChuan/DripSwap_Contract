@@ -4,51 +4,96 @@ pragma solidity ^0.8.24;
 import {DeployBase} from "script/lib/DeployBase.s.sol";
 import {console2} from "forge-std/console2.sol";
 import {stdJson} from "forge-std/StdJson.sol";
-import {Bridge} from "src/bridge/Bridge.sol"; // 指向你最新的 Bridge（调 Pool 的版本）
+import {Bridge} from "src/bridge/Bridge.sol";
 
+/// @title DeployBridge
+/// @notice 通过 ERC-2470 部署 Bridge 合约并完成基础配置
 contract DeployBridge is DeployBase {
     using stdJson for string;
 
     struct BridgeCfg {
+        address router;
         address linkToken;
+        uint64 chainSelector;
     }
 
     function run() external {
         console2.log("=== DeployBridge ===");
+        console2.log("Chain ID:", block.chainid);
+
         _ensureERC2470();
 
         // 1) 读取配置
         BridgeCfg memory cfg = _loadConfig();
+        console2.log("Router:", cfg.router);
+        console2.log("LINK Token:", cfg.linkToken);
+        console2.log("Chain Selector:", cfg.chainSelector);
 
         vm.startBroadcast();
+        address deployer = msg.sender;
 
-        // 2) 组合 initCode 并确定性部署
-        bytes memory initCode = abi.encodePacked(
-            type(Bridge).creationCode,
-            abi.encode(msg.sender) // admin_ = 广播者
-        );
+        // 2) 部署 Bridge
+        (address bridge, bool fresh) = _deployBridge(deployer, cfg.router, cfg.linkToken);
 
-        bytes32 salt = keccak256(abi.encodePacked("DripSwap::Bridge"));
-        (address bridge, bool fresh) = _deployDeterministic(initCode, salt);
-
+        // 3) 配置基础参数（如果是新部署）
         if (fresh) {
-            console2.log("[NEW] Bridge:", bridge);
-        } else {
-            console2.log("[SKIP] Bridge exists:", bridge);
-        }
-
-        // 3) 初始化：设置 LINK Token（可重复设置）
-        if (cfg.linkToken != address(0)) {
-            (bool ok, ) = bridge.call(abi.encodeWithSignature("setLinkToken(address)", cfg.linkToken));
-            require(ok, "setLinkToken failed");
-            console2.log("setLinkToken:", cfg.linkToken);
+            _configureBridge(bridge, deployer);
         }
 
         vm.stopBroadcast();
 
         // 4) 记录地址
         _bookSetAddress("bridge.address", bridge);
-        console2.log("[DONE] DeployBridge");
+        _bookSetAddress("bridge.router", cfg.router);
+        _bookSetAddress("bridge.link", cfg.linkToken);
+        _bookSetUint("bridge.chain_selector", cfg.chainSelector);
+
+        if (fresh) {
+            string memory mdPath = _deploymentFile("bridge.md");
+            vm.writeLine(mdPath, "");
+            vm.writeLine(mdPath, "[bridge]");
+            vm.writeLine(mdPath, string.concat("  address: ", vm.toString(bridge)));
+            vm.writeLine(mdPath, string.concat("  router: ", vm.toString(cfg.router)));
+            vm.writeLine(mdPath, string.concat("  link_token: ", vm.toString(cfg.linkToken)));
+            vm.writeLine(mdPath, string.concat("  chain_selector: ", vm.toString(cfg.chainSelector)));
+            vm.writeLine(mdPath, string.concat("  admin: ", vm.toString(deployer)));
+        }
+
+        console2.log("[DONE] DeployBridge completed");
+    }
+
+    function _deployBridge(
+        address admin,
+        address router,
+        address linkToken
+    ) internal returns (address deployed, bool freshly) {
+        bytes memory initCode = abi.encodePacked(
+            type(Bridge).creationCode,
+            abi.encode(admin, router, linkToken)
+        );
+
+        bytes32 salt = keccak256(abi.encodePacked("DripSwap::Bridge"));
+        (deployed, freshly) = _deployDeterministic(initCode, salt);
+
+        if (freshly) {
+            console2.log("[NEW] Bridge deployed:", deployed);
+        } else {
+            console2.log("[SKIP] Bridge exists:", deployed);
+        }
+    }
+
+    function _configureBridge(address bridge, address admin) internal {
+        Bridge b = Bridge(bridge);
+
+        // 设置默认参数
+        b.setServiceFee(0.001 ether, admin);
+        console2.log("Service fee set: 0.001 ether");
+
+        b.setLimits(1, type(uint256).max);
+        console2.log("Limits set: min=1, max=unlimited");
+
+        b.setPayMethod(true, true);
+        console2.log("Payment methods: native=true, link=true");
     }
 
     function _loadConfig() internal returns (BridgeCfg memory c) {
@@ -59,7 +104,8 @@ contract DeployBridge is DeployBase {
         else revert("Unsupported chain");
 
         string memory raw = vm.readFile(path);
+        c.router = raw.readAddress(".router");
         c.linkToken = raw.readAddress(".link_token");
-        console2.log("config.link_token:", c.linkToken);
+        c.chainSelector = uint64(raw.readUint(".chain_selector"));
     }
 }

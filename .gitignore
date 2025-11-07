@@ -26,7 +26,7 @@ cache/
 out/
 out-v2core/
 out-v2router/
-broadcast/
+broadcast*
 AGENTS.md
 coverage-html
 # ABI files (ignored - can be regenerated from source)
