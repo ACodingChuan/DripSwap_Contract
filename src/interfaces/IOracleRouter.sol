@@ -10,7 +10,10 @@ interface IOracleRouter {
     /// @dev 价源类型：
     ///      - UsdSplit: 由 base/USD 与 quote/USD 拼出 base/quote
     ///      - Fixed   : 固定锚价（用于测试网/无Feed场景），不参与 staleness 判定
-    enum PriceSrc { UsdSplit, Fixed }
+    enum PriceSrc {
+        UsdSplit,
+        Fixed
+    }
 
     /// @notice 查询 base/quote 的公允价（1e18）与更新时间与价源类型
     /// @param base   计价基准（分子）
@@ -28,8 +31,5 @@ interface IOracleRouter {
     /// @param  token  资产地址
     /// @return priceE18  价格(1e18)，含义：1 token = priceE18 / 1e18 USD
     /// @return updatedAt 链上更新时间（Fixed 场景返回当前块时间）
-    function getUSDPrice(address token)
-        external
-        view
-        returns (uint256 priceE18, uint256 updatedAt);
+    function getUSDPrice(address token) external view returns (uint256 priceE18, uint256 updatedAt);
 }

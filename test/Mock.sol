@@ -15,13 +15,14 @@ contract MockOracleRouter is IOracleRouter {
         PriceSrc src;
         bool set;
     }
+
     struct UsdRec {
         uint256 priceE18;
         uint256 updatedAt;
         bool set;
     }
 
-    mapping(bytes32 => Rec) private _pair;   // (min,max) -> record
+    mapping(bytes32 => Rec) private _pair; // (min,max) -> record
     mapping(address => UsdRec) private _usd; // token -> USD
 
     function _key(address a, address b) internal pure returns (bytes32) {
@@ -33,6 +34,7 @@ contract MockOracleRouter is IOracleRouter {
     function setPairPrice(address base, address quote, uint256 p, uint256 t, PriceSrc s) external {
         _pair[_key(base, quote)] = Rec({priceE18: p, updatedAt: t, src: s, set: true});
     }
+
     function setUSD(address token, uint256 p, uint256 t) external {
         _usd[token] = UsdRec({priceE18: p, updatedAt: t, set: true});
     }
@@ -48,11 +50,7 @@ contract MockOracleRouter is IOracleRouter {
         return (r.priceE18, r.updatedAt, r.src);
     }
 
-    function getUSDPrice(address token)
-        external
-        view
-        returns (uint256 priceE18, uint256 updatedAt)
-    {
+    function getUSDPrice(address token) external view returns (uint256 priceE18, uint256 updatedAt) {
         UsdRec memory r = _usd[token];
         require(r.set, "usd not set");
         return (r.priceE18, r.updatedAt);
@@ -63,11 +61,11 @@ contract MockOracleRouter is IOracleRouter {
  * 2) V2 Pair Mock (极简可调)  *
  *=============================*/
 contract MockV2Pair is IUniswapV2Pair {
-    address public  token0;
-    address public  token1;
+    address public token0;
+    address public token1;
     uint112 private _r0;
     uint112 private _r1;
-    uint32  private _ts;
+    uint32 private _ts;
 
     constructor(address _t0, address _t1, uint112 r0, uint112 r1) {
         token0 = _t0;
@@ -119,10 +117,22 @@ contract MockV2Factory is IUniswapV2Factory {
     }
 
     // 其余接口本测试用不到，返回默认值
-    function feeTo() external pure returns (address) { return address(0); }
-    function feeToSetter() external pure returns (address) { return address(0); }
-    function allPairs(uint256) external pure returns (address) { return address(0); }
-    function allPairsLength() external pure returns (uint256) { return 0; }
+    function feeTo() external pure returns (address) {
+        return address(0);
+    }
+
+    function feeToSetter() external pure returns (address) {
+        return address(0);
+    }
+
+    function allPairs(uint256) external pure returns (address) {
+        return address(0);
+    }
+
+    function allPairsLength() external pure returns (uint256) {
+        return 0;
+    }
+
     function setFeeTo(address) external pure {}
     function setFeeToSetter(address) external pure {}
 }
@@ -132,25 +142,19 @@ contract MockV2Factory is IUniswapV2Factory {
  *=====================================*/
 contract MockAggregatorV3 {
     int256 private _answer;
-    uint8  private _decimals;
+    uint8 private _decimals;
     uint256 private _updatedAt;
 
     constructor(uint8 d, int256 a, uint256 t) {
         _decimals = d;
-        _answer   = a;
+        _answer = a;
         _updatedAt = t;
     }
 
     function latestRoundData()
         external
         view
-        returns (
-            uint80 roundId,
-            int256 answer,
-            uint256 startedAt,
-            uint256 updatedAt,
-            uint80 answeredInRound
-        )
+        returns (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound)
     {
         return (1, _answer, _updatedAt, _updatedAt, 1);
     }

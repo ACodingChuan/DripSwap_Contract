@@ -16,25 +16,12 @@ contract DeployV2Deterministic is DeployBase {
     /// @param salt 盐值
     /// @param initCode 初始化代码（包含构造参数）
     /// @return deployed 部署的合约地址
-    function _deployViaERC2470(
-        string memory name,
-        bytes32 salt,
-        bytes memory initCode
-    ) internal returns (address deployed, bool freshly) {
-        address predicted = address(
-            uint160(
-                uint256(
-                    keccak256(
-                        abi.encodePacked(
-                            bytes1(0xff),
-                            ERC2470,
-                            salt,
-                            keccak256(initCode)
-                        )
-                    )
-                )
-            )
-        );
+    function _deployViaERC2470(string memory name, bytes32 salt, bytes memory initCode)
+        internal
+        returns (address deployed, bool freshly)
+    {
+        address predicted =
+            address(uint160(uint256(keccak256(abi.encodePacked(bytes1(0xff), ERC2470, salt, keccak256(initCode))))));
 
         if (predicted.code.length > 0) {
             console2.log(string.concat("[SKIP] ", name, " already deployed"));
@@ -50,11 +37,7 @@ contract DeployV2Deterministic is DeployBase {
         console2.logBytes32(keccak256(initCode));
 
         // 调用 Singleton Factory 的 deploy(bytes initCode, bytes32 salt) 函数
-        bytes memory payload = abi.encodeWithSelector(
-            bytes4(0x4af63f02),
-            initCode,
-            salt
-        );
+        bytes memory payload = abi.encodeWithSelector(bytes4(0x4af63f02), initCode, salt);
         console2.log("  payload length:", payload.length);
         console2.logBytes32(keccak256(payload));
         (bool success, bytes memory result) = ERC2470.call(payload);
@@ -69,7 +52,7 @@ contract DeployV2Deterministic is DeployBase {
                 revert(string.concat(name, ": deployment failed"));
             }
         }
-        
+
         console2.log("  raw result length:", result.length);
         console2.logBytes(result);
         if (result.length == 20) {
@@ -85,25 +68,25 @@ contract DeployV2Deterministic is DeployBase {
         }
         console2.log("  deployed address:", deployed);
         require(deployed == predicted, string.concat(name, ": unexpected address"));
-        
+
         // 2. 验证合约已部署
         require(deployed.code.length > 0, string.concat(name, ": no code at address"));
-        
+
         console2.log(string.concat("[OK] ", name, " deployed"));
         console2.log("  Address:", deployed);
-        
+
         return (deployed, true);
     }
-    
+
     /// @notice 生成盐值
     /// @param contractName 合约名称
     /// @return salt 生成的盐值
     function _generateSalt(string memory contractName) internal pure returns (bytes32) {
         return keccak256(
             abi.encodePacked(
-                "DripSwap",      // 项目名
-                "V2",            // 版本
-                contractName     // 合约名
+                "DripSwap", // 项目名
+                "V2", // 版本
+                contractName // 合约名
             )
         );
     }
@@ -118,7 +101,7 @@ contract DeployV2Deterministic is DeployBase {
         _ensureERC2470();
 
         vm.startBroadcast();
-        
+
         address deployer = msg.sender;
         console2.log("Deployer:", deployer);
         console2.log("");
@@ -127,28 +110,21 @@ contract DeployV2Deterministic is DeployBase {
 
         // ===== 1. 部署 UniswapV2Factory =====
         console2.log("=== Deploying UniswapV2Factory ===");
-        
-        string memory factoryArtifact = vm.readFile(
-            "out-v2core/UniswapV2Factory.sol/UniswapV2Factory.json"
-        );
+
+        string memory factoryArtifact = vm.readFile("out-v2core/UniswapV2Factory.sol/UniswapV2Factory.json");
         bytes memory factoryCode = vm.parseJsonBytes(factoryArtifact, ".bytecode.object");
         console2.log("factory init code length:", factoryCode.length);
         console2.logBytes32(keccak256(factoryCode));
-        bytes memory factoryBytecode = abi.encodePacked(
-            factoryCode,
-            abi.encode(deployer)
-        );
-        
+        bytes memory factoryBytecode = abi.encodePacked(factoryCode, abi.encode(deployer));
+
         bytes32 saltFactory = _generateSalt("Factory");
         (address factory, bool factoryFresh) = _deployViaERC2470("UniswapV2Factory", saltFactory, factoryBytecode);
         console2.log("");
 
         // ===== 2. 计算 INIT_CODE_PAIR_HASH =====
         console2.log("=== Computing INIT_CODE_PAIR_HASH ===");
-        
-        string memory pairArtifact = vm.readFile(
-            "out-v2core/UniswapV2Pair.sol/UniswapV2Pair.json"
-        );
+
+        string memory pairArtifact = vm.readFile("out-v2core/UniswapV2Pair.sol/UniswapV2Pair.json");
         bytes memory pairCode = vm.parseJsonBytes(pairArtifact, ".bytecode.object");
         bytes32 pairHash = keccak256(pairCode);
         console2.log("INIT_CODE_PAIR_HASH:");
@@ -157,16 +133,11 @@ contract DeployV2Deterministic is DeployBase {
 
         // ===== 3. 部署 UniswapV2Router01 =====
         console2.log("=== Deploying UniswapV2Router01 ===");
-        
-        string memory routerArtifact = vm.readFile(
-            "out-v2router/UniswapV2Router01.sol/UniswapV2Router01.json"
-        );
+
+        string memory routerArtifact = vm.readFile("out-v2router/UniswapV2Router01.sol/UniswapV2Router01.json");
         bytes memory routerCode = vm.parseJsonBytes(routerArtifact, ".bytecode.object");
-        bytes memory routerBytecode = abi.encodePacked(
-            routerCode,
-            abi.encode(factory, weth)
-        );
-        
+        bytes memory routerBytecode = abi.encodePacked(routerCode, abi.encode(factory, weth));
+
         bytes32 saltRouter = _generateSalt("Router01");
         (address router, bool routerFresh) = _deployViaERC2470("UniswapV2Router01", saltRouter, routerBytecode);
         console2.log("");
@@ -179,7 +150,7 @@ contract DeployV2Deterministic is DeployBase {
         _bookSetAddress("v2.router", router);
         _bookSetAddress("v2.weth", weth);
         _bookSet("v2.init_code_hash", _toHex(pairHash));
-        
+
         console2.log("");
         console2.log("=== Deployment Summary ===");
         console2.log("Factory Deployer (ERC-2470):", ERC2470);
@@ -215,5 +186,4 @@ contract DeployV2Deterministic is DeployBase {
         }
         return string(str);
     }
-
 }

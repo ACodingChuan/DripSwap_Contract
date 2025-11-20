@@ -10,13 +10,7 @@ interface AggregatorV3Interface {
     function latestRoundData()
         external
         view
-        returns (
-            uint80 roundId,
-            int256 answer,
-            uint256 startedAt,
-            uint256 updatedAt,
-            uint80 answeredInRound
-        );
+        returns (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound);
     function decimals() external view returns (uint8);
 }
 
@@ -30,20 +24,20 @@ interface AggregatorV3Interface {
 ///         - 采用自定义错误，减少运行时代码；
 ///         - `aggDecimals` 作为可选缓存：非 0 则使用；为 0 时回退链上 `decimals()`（view，不上链）。
 contract ChainlinkOracle is IOracleRouter, Ownable2Step {
-
     constructor(address initialOwner) Ownable(initialOwner) {}
     // ========= 自定义错误（替代长字符串，减少部署字节码） =========
+
     error OracleBadAnswer(address aggregator); // Chainlink 返回非正数
-    error OracleQuoteZero(address quote);      // 组合时除数为0（应当不发生）
+    error OracleQuoteZero(address quote); // 组合时除数为0（应当不发生）
 
     /// @notice token->USD 价源配置（单槽：20B + 1B + 11B = 32B）
     /// @param aggregator   Chainlink Aggregator 合约地址；为0表示无Feed，走 fixedUsdE18
     /// @param aggDecimals  （可选）缓存喂价小数位；为0表示运行时读取 aggregator.decimals()
     /// @param fixedUsdE18  固定USD价格（1e18表示1 USD）；仅 aggregator=0 时生效
     struct FeedUSD {
-        address aggregator;   // 20 bytes
-        uint8   aggDecimals;  // 1  byte（0 表示未缓存，运行时读取）
-        uint88  fixedUsdE18;  // 11 bytes（≈ 3.09e8 USD/枚上限；测试网兜底足够）
+        address aggregator; // 20 bytes
+        uint8 aggDecimals; // 1  byte（0 表示未缓存，运行时读取）
+        uint88 fixedUsdE18; // 11 bytes（≈ 3.09e8 USD/枚上限；测试网兜底足够）
     }
 
     /// @dev token => USD 价源映射（每个条目仅 1 个存储槽）
@@ -66,12 +60,7 @@ contract ChainlinkOracle is IOracleRouter, Ownable2Step {
     // ================ IOracleRouter 实现 ================
 
     /// @inheritdoc IOracleRouter
-    function getUSDPrice(address token)
-        public
-        view
-        override
-        returns (uint256 pxE18, uint256 updatedAt)
-    {
+    function getUSDPrice(address token) public view override returns (uint256 pxE18, uint256 updatedAt) {
         FeedUSD memory f = usdFeeds[token];
 
         // 情况A：无Chainlink喂价 → 使用固定锚价（Fixed）
@@ -82,7 +71,7 @@ contract ChainlinkOracle is IOracleRouter, Ownable2Step {
         }
 
         // 情况B：有Chainlink喂价 → 从 aggregator 读取最新值
-        (, int256 ans, , uint256 ts, ) = AggregatorV3Interface(f.aggregator).latestRoundData();
+        (, int256 ans,, uint256 ts,) = AggregatorV3Interface(f.aggregator).latestRoundData();
         if (ans <= 0) revert OracleBadAnswer(f.aggregator);
 
         // 统一换算到1e18精度：
@@ -124,13 +113,13 @@ contract ChainlinkOracle is IOracleRouter, Ownable2Step {
             updatedAt = block.timestamp; // 双Fixed情形：时间无意义，给当前块时间
         } else if (bFixed) {
             src = PriceSrc.Fixed;
-            updatedAt = qTs;             // 以非Fixed一侧时间为准
+            updatedAt = qTs; // 以非Fixed一侧时间为准
         } else if (qFixed) {
             src = PriceSrc.Fixed;
             updatedAt = bTs;
         } else {
             src = PriceSrc.UsdSplit;
-            updatedAt = bTs < qTs ? bTs : qTs; 
+            updatedAt = bTs < qTs ? bTs : qTs;
         }
     }
 }

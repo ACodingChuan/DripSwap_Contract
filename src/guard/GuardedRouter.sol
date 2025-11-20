@@ -19,21 +19,30 @@ import {IUniswapV2Pair} from "src/interfaces/IUniswapV2Pair.sol";
 contract GuardedRouter is Ownable2Step {
     // ===== 自定义错误（替代 require/字符串，节省部署与运行期 gas） =====
     error ZeroAddress();
-    error PathLength();  // path.length != 2
-    error PathArgs();    // 零地址或重复地址
+    error PathLength(); // path.length != 2
+    error PathArgs(); // 零地址或重复地址
 
     // ===== 常量（运行期不占存储） =====
-    uint256 private constant FEE_NUM = 997;    // Uniswap V2 0.3% 手续费的“有效系数”
+    uint256 private constant FEE_NUM = 997; // Uniswap V2 0.3% 手续费的“有效系数”
     uint256 private constant FEE_DEN = 1000;
 
     // ===== 单槽全局默认参数 =====
     /// @param hardBps      正常价源下的价格偏离硬阈值（基点，10000=100%）
     /// @param hardBpsFixed 任一侧为 Fixed 价源时的放宽阈值（基点）
     /// @param staleSec     正常价源下的过期秒数
-    struct Defaults { uint16 hardBps; uint16 hardBpsFixed; uint32 staleSec; }
+    struct Defaults {
+        uint16 hardBps;
+        uint16 hardBpsFixed;
+        uint32 staleSec;
+    }
+
     Defaults public defaults; // 1 槽
 
-    struct PairCfg { uint16 hardBps; uint32 staleSec; uint8 enabled; }
+    struct PairCfg {
+        uint16 hardBps;
+        uint32 staleSec;
+        uint8 enabled;
+    }
 
     /// @notice 工厂地址（不可变，读便宜、部署不 SSTORE）
     IUniswapV2Factory public immutable FACTORY;
@@ -59,15 +68,15 @@ contract GuardedRouter is Ownable2Step {
         address initialOwner
     ) Ownable(initialOwner) {
         if (_factory == address(0) || _oracle == address(0)) revert ZeroAddress();
-        FACTORY  = IUniswapV2Factory(_factory);     // immutable → 不写存储
-        oracle   = IOracleRouter(_oracle);          // 1 槽
+        FACTORY = IUniswapV2Factory(_factory); // immutable → 不写存储
+        oracle = IOracleRouter(_oracle); // 1 槽
         defaults = Defaults(_hardBps, _hardBpsFixed, _staleSec); // 1 槽
     }
 
     // ===== 仅 owner 的管理入口 =====
     function setOracleRouter(address _oracle) external onlyOwner {
         if (_oracle == address(0)) revert ZeroAddress();
-        oracle = IOracleRouter(_oracle);            // 非0→非0 ≈ 5k gas
+        oracle = IOracleRouter(_oracle); // 非0→非0 ≈ 5k gas
         emit OracleUpdated(_oracle);
     }
 
@@ -133,7 +142,15 @@ contract GuardedRouter is Ownable2Step {
     function checkSwapExactOut(address[] calldata path, uint256 amountOut)
         external
         view
-        returns (bool ok, uint256 devBps, uint256 limitBps, bool stale, uint256 dexAfterE18, uint256 oracleE18, uint256 amountInNeeded)
+        returns (
+            bool ok,
+            uint256 devBps,
+            uint256 limitBps,
+            bool stale,
+            uint256 dexAfterE18,
+            uint256 oracleE18,
+            uint256 amountInNeeded
+        )
     {
         _validatePath2(path);
 
@@ -141,8 +158,9 @@ contract GuardedRouter is Ownable2Step {
         if (stale) return (false, 0, limitBps, true, 0, oracleE18, 0);
 
         (address pair, uint112 rBase, uint112 rQuote) = _orientedReserves(path[0], path[1]);
-        if (pair == address(0) || rBase == 0 || amountOut >= rQuote)
+        if (pair == address(0) || rBase == 0 || amountOut >= rQuote) {
             return (false, 0, limitBps, false, 0, oracleE18, 0);
+        }
 
         // in = ceil(resIn*out*1000 / ((resOut - out)*997))
         uint256 num = uint256(rBase) * amountOut * FEE_DEN;
@@ -175,17 +193,16 @@ contract GuardedRouter is Ownable2Step {
 
         if (src == IOracleRouter.PriceSrc.Fixed) {
             srcFixed = true;
-            stale    = false;
+            stale = false;
             limitBps = (hardBps >= defaults.hardBpsFixed) ? hardBps : defaults.hardBpsFixed;
         } else {
             srcFixed = false;
-            stale    = (block.timestamp - updatedAt) > staleSec;
+            stale = (block.timestamp - updatedAt) > staleSec;
             limitBps = hardBps;
         }
     }
 
-
-        /// @dev 只拿交易需要的三项：公允价 / 偏离阈值 / 是否过期（减少一次多返回解构）
+    /// @dev 只拿交易需要的三项：公允价 / 偏离阈值 / 是否过期（减少一次多返回解构）
     function _oracleAndLimit(address base, address quote)
         internal
         view
@@ -198,10 +215,10 @@ contract GuardedRouter is Ownable2Step {
         (uint16 hardBps, uint32 staleSec) = _pairPolicy(base, quote);
 
         if (src == IOracleRouter.PriceSrc.Fixed) {
-            stale    = false;
+            stale = false;
             limitBps = (hardBps >= defaults.hardBpsFixed) ? hardBps : defaults.hardBpsFixed;
         } else {
-            stale    = (block.timestamp - updatedAt) > staleSec;
+            stale = (block.timestamp - updatedAt) > staleSec;
             limitBps = hardBps;
         }
     }
@@ -217,17 +234,18 @@ contract GuardedRouter is Ownable2Step {
         (uint112 r0, uint112 r1,) = IUniswapV2Pair(pair).getReserves();
         address t0 = IUniswapV2Pair(pair).token0();
         if (t0 == base) {
-            rBase = r0; rQuote = r1;
+            rBase = r0;
+            rQuote = r1;
         } else {
-            rBase = r1; rQuote = r0;
+            rBase = r1;
+            rQuote = r0;
         }
     }
-
 
     /// @dev 方向归一：把 pair 的 (r0,r1) 变成“面向 base→quote”的 (reserveBase,reserveQuote)
     struct Oriented {
         address pair;
-        bool    baseIsT0;
+        bool baseIsT0;
         uint112 reserveBase;
         uint112 reserveQuote;
     }
@@ -239,12 +257,12 @@ contract GuardedRouter is Ownable2Step {
         address t0 = IUniswapV2Pair(p).token0();
         o.pair = p;
         if (t0 == base) {
-            o.baseIsT0     = true;
-            o.reserveBase  = r0;
+            o.baseIsT0 = true;
+            o.reserveBase = r0;
             o.reserveQuote = r1;
         } else {
-            o.baseIsT0     = false;
-            o.reserveBase  = r1;
+            o.baseIsT0 = false;
+            o.reserveBase = r1;
             o.reserveQuote = r0;
         }
     }
@@ -254,10 +272,10 @@ contract GuardedRouter is Ownable2Step {
         (bytes32 key,,) = _pairKeySorted(a, b);
         PairCfg memory cfg = pairCfg[key];
         if (cfg.enabled != 0) {
-            hardBps  = (cfg.hardBps  == 0) ? defaults.hardBps  : cfg.hardBps;
+            hardBps = (cfg.hardBps == 0) ? defaults.hardBps : cfg.hardBps;
             staleSec = (cfg.staleSec == 0) ? defaults.staleSec : cfg.staleSec;
         } else {
-            hardBps  = defaults.hardBps;
+            hardBps = defaults.hardBps;
             staleSec = defaults.staleSec;
         }
     }

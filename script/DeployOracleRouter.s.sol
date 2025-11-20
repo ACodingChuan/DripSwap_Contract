@@ -11,9 +11,9 @@ contract DeployOracleRouter is DeployBase {
     using stdJson for string;
 
     function run() external {
-        uint256 pk    = vm.envUint("DEPLOYER_PK");
+        uint256 pk = vm.envUint("DEPLOYER_PK");
         address owner = vm.addr(pk);
-        
+
         console2.log("=== Deploying Oracle Router ===");
         console2.log("Chain ID:", block.chainid);
         console2.log("");
@@ -21,7 +21,7 @@ contract DeployOracleRouter is DeployBase {
         _ensureERC2470();
 
         string memory feedsPath = _feedsPath();
-        
+
         vm.startBroadcast(pk);
 
         (address orc, bool freshly) = _deployOracle(owner);
@@ -33,7 +33,7 @@ contract DeployOracleRouter is DeployBase {
         _bookSetAddress("oracle.owner", owner);
 
         vm.stopBroadcast();
-        
+
         console2.log("");
         console2.log("[OK] Oracle Router deployed/configured");
 
@@ -50,14 +50,8 @@ contract DeployOracleRouter is DeployBase {
     /// @notice 部署Oracle（带幂等性检查）
     function _deployOracle(address owner) internal returns (address deployed, bool freshly) {
         // 生成盐值
-        bytes32 salt = keccak256(
-            abi.encodePacked(
-                "DripSwap",
-                "Oracle",
-                "ChainlinkOracle"
-            )
-        );
-        
+        bytes32 salt = keccak256(abi.encodePacked("DripSwap", "Oracle", "ChainlinkOracle"));
+
         // 准备字节码
         bytes memory creationCode = type(ChainlinkOracle).creationCode;
         bytes memory bytecode = abi.encodePacked(creationCode, abi.encode(owner));
@@ -91,10 +85,10 @@ contract DeployOracleRouter is DeployBase {
 
         ChainlinkOracle oracle = ChainlinkOracle(orc);
 
-        for (uint i = 0; i < keys.length; i++) {
+        for (uint256 i = 0; i < keys.length; i++) {
             string memory sym = keys[i];
             string memory base = string.concat(".feeds.", sym, ".");
-            string memory typ  = jf.readString(string.concat(base, "type"));
+            string memory typ = jf.readString(string.concat(base, "type"));
 
             // 解析地址簿中的 token 地址
             address token = _tokenAddress(sym);
@@ -107,11 +101,7 @@ contract DeployOracleRouter is DeployBase {
                 // fixed: aggregator=0, fixedUsdE18 必须能放进 uint88
                 uint256 pxE18 = vm.parseUint(jf.readString(string.concat(base, "priceE18")));
                 require(pxE18 <= type(uint88).max, "fixed priceE18 > uint88 max");
-                cfg = ChainlinkOracle.FeedUSD({
-                    aggregator: address(0),
-                    aggDecimals: 0,
-                    fixedUsdE18: uint88(pxE18)
-                });
+                cfg = ChainlinkOracle.FeedUSD({aggregator: address(0), aggDecimals: 0, fixedUsdE18: uint88(pxE18)});
                 oracle.setUSDFeed(token, cfg);
                 console2.log("[feed] fixed ", sym, pxE18);
             } else if (_eq(typ, "chainlink")) {
@@ -120,21 +110,14 @@ contract DeployOracleRouter is DeployBase {
                 uint8 dec = uint8(vm.parseUint(jf.readString(string.concat(base, "aggDecimals"))));
                 if (hasAggregator) {
                     address agg = vm.parseAddress(jf.readString(aggPath));
-                    cfg = ChainlinkOracle.FeedUSD({
-                        aggregator: agg,
-                        aggDecimals: dec,
-                        fixedUsdE18: 0
-                    });
+                    cfg = ChainlinkOracle.FeedUSD({aggregator: agg, aggDecimals: dec, fixedUsdE18: 0});
                     oracle.setUSDFeed(token, cfg);
                     console2.log("[feed] chainlink ", sym, agg, dec);
                 } else {
                     uint256 pxE18 = vm.parseUint(jf.readString(string.concat(base, "priceE18")));
                     require(pxE18 <= type(uint88).max, "chainlink priceE18 > uint88 max");
-                    cfg = ChainlinkOracle.FeedUSD({
-                        aggregator: address(0),
-                        aggDecimals: dec,
-                        fixedUsdE18: uint88(pxE18)
-                    });
+                    cfg =
+                        ChainlinkOracle.FeedUSD({aggregator: address(0), aggDecimals: dec, fixedUsdE18: uint88(pxE18)});
                     oracle.setUSDFeed(token, cfg);
                     console2.log("[feed] chainlink (no agg) ", sym, pxE18);
                 }
@@ -149,8 +132,7 @@ contract DeployOracleRouter is DeployBase {
         address checkBase = _tokenAddress("vETH");
         address checkQuote = _tokenAddress("vUSDT");
 
-        (uint256 px, uint256 ts, IOracleRouter.PriceSrc src) =
-            IOracleRouter(orc).latestAnswer(checkBase, checkQuote);
+        (uint256 px, uint256 ts, IOracleRouter.PriceSrc src) = IOracleRouter(orc).latestAnswer(checkBase, checkQuote);
         console2.log("Self-check: vETH/vUSDT price =", px);
 
         return configured;
@@ -177,7 +159,7 @@ contract DeployOracleRouter is DeployBase {
     function _feedsPath() internal view returns (string memory) {
         if (block.chainid == 31337) return "configs/local/feeds.json";
         if (block.chainid == 11155111) return "configs/sepolia/feeds.json";
-        if (block.chainid == 534351) return "configs/scroll/feeds.json"; 
+        if (block.chainid == 534351) return "configs/scroll/feeds.json";
         revert("DeployOracleRouter: missing feeds config");
     }
 }

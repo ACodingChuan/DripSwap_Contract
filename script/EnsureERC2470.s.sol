@@ -10,12 +10,12 @@ contract EnsureERC2470 is DeployBase {
     function run() external {
         console2.log("=== Ensure ERC-2470 Singleton Factory ===");
         console2.log("Chain ID:", block.chainid);
-        
+
         if (ERC2470.code.length > 0) {
             console2.log("[OK] ERC-2470 already exists at", ERC2470);
             return;
         }
-        
+
         if (block.chainid == 31337) {
             // Anvil: 使用 vm.etch 注入代码
             // 注意：vm.etch 只在 Foundry 模拟环境中生效，不会生成真实交易
@@ -26,7 +26,7 @@ contract EnsureERC2470 is DeployBase {
         } else {
             revert("ERC-2470 not deployed on this network. Please deploy it first.");
         }
-        
+
         console2.log("[OK] ERC-2470 ready at", ERC2470);
     }
 }

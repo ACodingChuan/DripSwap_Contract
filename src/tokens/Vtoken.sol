@@ -3,7 +3,8 @@ pragma solidity ^0.8.24;
 
 import {Initializable} from "@openzeppelin/contracts/proxy/utils/Initializable.sol";
 import {ERC20Upgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
-import {ERC20PermitUpgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/ERC20PermitUpgradeable.sol";
+import {ERC20PermitUpgradeable} from
+    "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/ERC20PermitUpgradeable.sol";
 import {AccessControlUpgradeable} from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
 import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import {PausableUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
@@ -28,12 +29,10 @@ contract VToken is
     event Burned(address indexed caller, uint256 amount);
 
     /// @notice 初始化克隆实例
-    function initialize(
-        string memory name_,
-        string memory symbol_,
-        uint8 decimals_,
-        address initialOwner
-    ) public initializer {
+    function initialize(string memory name_, string memory symbol_, uint8 decimals_, address initialOwner)
+        public
+        initializer
+    {
         require(initialOwner != address(0), "ZeroOwner");
 
         __ERC20_init(name_, symbol_);
@@ -49,21 +48,13 @@ contract VToken is
     }
 
     /// @notice Mint tokens (only CCIP Pool)
-    function mint(address to, uint256 amount)
-        external
-        onlyRole(BRIDGE_ROLE)
-        whenNotPaused
-    {
+    function mint(address to, uint256 amount) external onlyRole(BRIDGE_ROLE) whenNotPaused {
         _mint(to, amount);
         emit Minted(msg.sender, to, amount);
     }
 
     /// @notice Burn tokens held by the caller (only CCIP Pool)
-    function burn(uint256 amount)
-        external
-        onlyRole(BRIDGE_ROLE)
-        whenNotPaused
-    {
+    function burn(uint256 amount) external onlyRole(BRIDGE_ROLE) whenNotPaused {
         _burn(msg.sender, amount);
         emit Burned(msg.sender, amount);
     }
@@ -97,12 +88,7 @@ contract VToken is
     }
 
     // --- ERC165 / AccessControl ---
-    function supportsInterface(bytes4 interfaceId)
-        public
-        view
-        override(AccessControlUpgradeable)
-        returns (bool)
-    {
+    function supportsInterface(bytes4 interfaceId) public view override(AccessControlUpgradeable) returns (bool) {
         return super.supportsInterface(interfaceId);
     }
 

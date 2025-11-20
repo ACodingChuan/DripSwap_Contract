@@ -13,9 +13,9 @@ contract DeployGuard is DeployBase {
     using stdJson for string;
 
     function run() external {
-        uint256 pk    = vm.envUint("DEPLOYER_PK");
+        uint256 pk = vm.envUint("DEPLOYER_PK");
         address owner = vm.addr(pk);
-        
+
         console2.log("=== Deploying Guarded Router ===");
         console2.log("Chain ID:", block.chainid);
         console2.log("");
@@ -23,16 +23,16 @@ contract DeployGuard is DeployBase {
         _ensureERC2470();
 
         string memory guardPath = _guardPath();
-        
+
         vm.startBroadcast(pk);
 
         address factory = _bookGetAddress("v2.factory");
-        address oracle  = _bookGetAddress("oracle.router");
+        address oracle = _bookGetAddress("oracle.router");
 
         // 2) 默认阈值（若没有 guard 配置，则使用 .env）
-        uint16 hardBps      = 300;
+        uint16 hardBps = 300;
         uint16 hardBpsFixed = 500;
-        uint32 staleSec     = 600;
+        uint32 staleSec = 600;
 
         bool hasGuardCfg = vm.exists(guardPath);
         string memory cfg;
@@ -60,7 +60,7 @@ contract DeployGuard is DeployBase {
         // 5) per-pair overrides（可选）
         if (hasGuardCfg) {
             try vm.parseJsonKeys(cfg, ".overrides") returns (string[] memory keys) {
-                for (uint i = 0; i < keys.length; i++) {
+                for (uint256 i = 0; i < keys.length; i++) {
                     _applyOverride(guard, cfg, keys[i], hardBps, staleSec);
                 }
             } catch {}
@@ -72,7 +72,7 @@ contract DeployGuard is DeployBase {
         _bookSetUint("guard.defaults.staleSec", staleSec);
 
         vm.stopBroadcast();
-        
+
         console2.log("");
         console2.log("[OK] Guarded Router deployed/configured");
 
@@ -100,21 +100,13 @@ contract DeployGuard is DeployBase {
         address owner
     ) internal returns (address deployed, bool freshly) {
         // 生成盐值
-        bytes32 salt = keccak256(
-            abi.encodePacked(
-                "DripSwap",
-                "Guard",
-                "GuardedRouter"
-            )
-        );
-        
+        bytes32 salt = keccak256(abi.encodePacked("DripSwap", "Guard", "GuardedRouter"));
+
         // 准备字节码
         bytes memory creationCode = type(GuardedRouter).creationCode;
-        bytes memory bytecode = abi.encodePacked(
-            creationCode,
-            abi.encode(factory, oracle, hardBps, hardBpsFixed, staleSec, owner)
-        );
-        
+        bytes memory bytecode =
+            abi.encodePacked(creationCode, abi.encode(factory, oracle, hardBps, hardBpsFixed, staleSec, owner));
+
         (deployed, freshly) = _deployDeterministic(bytecode, salt);
 
         if (freshly) {
@@ -140,21 +132,22 @@ contract DeployGuard is DeployBase {
     /// @dev 从 "vETH_vUSDT" 提取 ["vETH","vUSDT"]（纯 Solidity 实现，兼容性最好）
     function _splitPairSym(string memory key) internal pure returns (string memory sa, string memory sb) {
         bytes memory bs = bytes(key);
-        uint idx;
-        for (uint i = 0; i < bs.length; i++) {
-            if (bs[i] == 0x5f) { // '_'
+        uint256 idx;
+        for (uint256 i = 0; i < bs.length; i++) {
+            if (bs[i] == 0x5f) {
+                // '_'
                 idx = i;
                 break;
             }
         }
         // 左半部分
         bytes memory ba = new bytes(idx);
-        for (uint i = 0; i < idx; i++) {
+        for (uint256 i = 0; i < idx; i++) {
             ba[i] = bs[i];
         }
         // 右半部分
         bytes memory bb = new bytes(bs.length - idx - 1);
-        for (uint i = idx + 1; i < bs.length; i++) {
+        for (uint256 i = idx + 1; i < bs.length; i++) {
             bb[i - idx - 1] = bs[i];
         }
         sa = string(ba);

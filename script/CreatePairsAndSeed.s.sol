@@ -26,8 +26,8 @@ contract CreatePairsAndSeed is DeployBase {
     uint256 constant ONE_E18 = 1e18;
 
     struct PairSpec {
-        string base;   // 例：vBTC
-        string quote;  // 例：vUSDT
+        string base; // 例：vBTC
+        string quote; // 例：vUSDT
     }
 
     function run() external {
@@ -37,8 +37,8 @@ contract CreatePairsAndSeed is DeployBase {
         string memory pairsPath = _pairsPath();
 
         address factory = _bookGetAddress("v2.factory");
-        address router  = _bookGetAddress("v2.router");
-        address oracle  = _bookGetAddress("oracle.router");
+        address router = _bookGetAddress("v2.router");
+        address oracle = _bookGetAddress("oracle.router");
 
         // --- 配置 ---
         string memory cfg = vm.readFile(pairsPath);
@@ -46,15 +46,13 @@ contract CreatePairsAndSeed is DeployBase {
         PairSpec[] memory pairs = abi.decode(rawPairs, (PairSpec[]));
 
         // 以 1e18 记账的“quote 侧最小美元规模”（例如 $100 -> 1e20）
-        uint256 minQuoteUsdE18 = vm.parseUint(
-            cfg.readString(".seedPolicy.minQuoteUsdE18")
-        );
+        uint256 minQuoteUsdE18 = vm.parseUint(cfg.readString(".seedPolicy.minQuoteUsdE18"));
 
-        for (uint i = 0; i < pairs.length; i++) {
-            string memory baseSym  = pairs[i].base;
+        for (uint256 i = 0; i < pairs.length; i++) {
+            string memory baseSym = pairs[i].base;
             string memory quoteSym = pairs[i].quote;
 
-            address base  = _tokenAddress(baseSym);
+            address base = _tokenAddress(baseSym);
             address quote = _tokenAddress(quoteSym);
 
             // 1) 检查是否已在地址簿中记录（幂等性检查）
@@ -72,13 +70,9 @@ contract CreatePairsAndSeed is DeployBase {
             if (pair == address(0)) {
                 pair = IUniswapV2Factory(factory).createPair(base, quote);
                 newlyCreated = true;
-                console2.log(
-                    string.concat("createPair ", baseSym, "/", quoteSym, " -> ", _toHex(pair))
-                );
+                console2.log(string.concat("createPair ", baseSym, "/", quoteSym, " -> ", _toHex(pair)));
             } else {
-                console2.log(
-                    string.concat("pair exists ", baseSym, "/", quoteSym, " -> ", _toHex(pair))
-                );
+                console2.log(string.concat("pair exists ", baseSym, "/", quoteSym, " -> ", _toHex(pair)));
             }
 
             // 3) 读 oracle 价格（base/quote，1e18 精度）
@@ -90,7 +84,7 @@ contract CreatePairsAndSeed is DeployBase {
             require(quoteUsdE18 > 0, "oracle quote usd=0");
 
             // 4) 读取 decimals，做单位归一化
-            uint8 baseDec  = IERC20Metadata(base).decimals();
+            uint8 baseDec = IERC20Metadata(base).decimals();
             uint8 quoteDec = IERC20Metadata(quote).decimals();
 
             // 5) 计算首注数量（Peg 到 oracle）
@@ -102,13 +96,14 @@ contract CreatePairsAndSeed is DeployBase {
 
             // 按价格配出 base 侧数量：
             // amountBase(最小单位) = amountQuote * 1e18 * 10^baseDec / (pxE18 * 10^quoteDec)
-            uint256 amountBase = (amountQuote * ONE_E18 * (10 ** uint256(baseDec))) / (pxE18 * (10 ** uint256(quoteDec)));
+            uint256 amountBase =
+                (amountQuote * ONE_E18 * (10 ** uint256(baseDec))) / (pxE18 * (10 ** uint256(quoteDec)));
             if (amountBase == 0) amountBase = 1; // 保底 1 个最小单位
 
             // 6) 授权（精确授权；也可用 max，视你偏好）
-            _safeApprove(base,  router, 0);
+            _safeApprove(base, router, 0);
             _safeApprove(quote, router, 0);
-            _safeApprove(base,  router, amountBase);
+            _safeApprove(base, router, amountBase);
             _safeApprove(quote, router, amountQuote);
 
             // 7) 首次注入流动性（amountAMin/amountBMin=0；生产可改为非 0 以防前置）
@@ -117,8 +112,8 @@ contract CreatePairsAndSeed is DeployBase {
                 quote,
                 amountBase,
                 amountQuote,
-                0,                    // amountAMin（生产可设为 amountBase*(1-pegBps/1e4)）
-                0,                    // amountBMin（同上）
+                0, // amountAMin（生产可设为 amountBase*(1-pegBps/1e4)）
+                0, // amountBMin（同上）
                 vm.addr(pk),
                 block.timestamp + 600
             );
@@ -148,7 +143,7 @@ contract CreatePairsAndSeed is DeployBase {
 
     function _safeApprove(address token, address spender, uint256 amount) internal {
         // 简单安全授权（不少 ERC20 需要先清零再授权）
-        (bool ok, ) = token.call(abi.encodeWithSelector(IERC20.approve.selector, spender, amount));
+        (bool ok,) = token.call(abi.encodeWithSelector(IERC20.approve.selector, spender, amount));
         require(ok, "approve failed");
     }
 
@@ -156,9 +151,10 @@ contract CreatePairsAndSeed is DeployBase {
         bytes20 data = bytes20(a);
         bytes16 hexSymbols = "0123456789abcdef";
         bytes memory str = new bytes(42);
-        str[0] = "0"; str[1] = "x";
-        for (uint i = 0; i < 20; i++) {
-            str[2 + i * 2]     = hexSymbols[uint8(data[i] >> 4)];
+        str[0] = "0";
+        str[1] = "x";
+        for (uint256 i = 0; i < 20; i++) {
+            str[2 + i * 2] = hexSymbols[uint8(data[i] >> 4)];
             str[2 + i * 2 + 1] = hexSymbols[uint8(data[i] & 0x0f)];
         }
         return string(str);

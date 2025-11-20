@@ -25,19 +25,18 @@ contract Faucet is Ownable2Step, AccessControl, ReentrancyGuard, Pausable {
 
     // ===== 常量&角色 =====
     uint256 private constant DAY = 1 days;
-    bytes32 public constant FUNDER_ROLE = keccak256("FUNDER_ROLE");       // 资方充值
-    bytes32 public constant TREASURER_ROLE = keccak256("TREASURER_ROLE");  // 财务归集
+    bytes32 public constant FUNDER_ROLE = keccak256("FUNDER_ROLE"); // 资方充值
+    bytes32 public constant TREASURER_ROLE = keccak256("TREASURER_ROLE"); // 财务归集
 
     // ===== 配置与状态结构 =====
 
     /// @notice 每种 Token 的配额配置与“自然日”发放状态
     struct TokenConfig {
-        uint128 perClaim;        // 单次领取额度；0 表示停用
-        uint128 dailyCap;        // 日上限；0 表示无限制
-        uint128 issuedToday;     // 当日已发放量
-        uint64 lastIssuedDay;    // 最近一次重置时的自然日序号
+        uint128 perClaim; // 单次领取额度；0 表示停用
+        uint128 dailyCap; // 日上限；0 表示无限制
+        uint128 issuedToday; // 当日已发放量
+        uint64 lastIssuedDay; // 最近一次重置时的自然日序号
     }
-
 
     // ===== 事件 =====
     event PassPurchased(address indexed buyer, uint256 amountPaid, uint256 dayIndex);
@@ -50,15 +49,15 @@ contract Faucet is Ownable2Step, AccessControl, ReentrancyGuard, Pausable {
     event ParamUpdated(bytes32 indexed key, address indexed token, uint256 value);
 
     // ===== 全局配置/状态 =====
-    uint64 private _cooldownDays = 1;                                 // 自然日冷却（默认 1 天）
-    mapping(address => TokenConfig) private _tokenConfig;             // Token 配额配置
+    uint64 private _cooldownDays = 1; // 自然日冷却（默认 1 天）
+    mapping(address => TokenConfig) private _tokenConfig; // Token 配额配置
     mapping(address => mapping(address => uint64)) private _lastClaimDay; // token => user => 最近领取日
-    mapping(address => uint64) private _passValidDayPlusOne;         // 用户通行证有效日 + 1
+    mapping(address => uint64) private _passValidDayPlusOne; // 用户通行证有效日 + 1
     bool private _paidPassEnabled;
     uint256 private _passPriceEth;
     bool private _blacklistEnabled;
     mapping(address => bool) private _blacklisted;
-    address private _treasury;                                        // 财务金库地址
+    address private _treasury; // 财务金库地址
 
     // ===== 构造 & 初始化权限 =====
 
@@ -66,8 +65,8 @@ contract Faucet is Ownable2Step, AccessControl, ReentrancyGuard, Pausable {
     /// @dev 这里选择将部署者设为 owner / 三个角色的初始持有者；如需多签可后续转移
     constructor() Ownable(msg.sender) {
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
-        _grantRole(FUNDER_ROLE,         msg.sender);
-        _grantRole(TREASURER_ROLE,      msg.sender);
+        _grantRole(FUNDER_ROLE, msg.sender);
+        _grantRole(TREASURER_ROLE, msg.sender);
         _treasury = msg.sender;
     }
 
@@ -134,8 +133,13 @@ contract Faucet is Ownable2Step, AccessControl, ReentrancyGuard, Pausable {
         emit ParamUpdated("DAILY_CAP", token, cap);
     }
 
-    function pause() external onlyOwner { _pause(); }
-    function unpause() external onlyOwner { _unpause(); }
+    function pause() external onlyOwner {
+        _pause();
+    }
+
+    function unpause() external onlyOwner {
+        _unpause();
+    }
 
     function systemRemainingToday(address token) external view returns (uint256) {
         TokenConfig storage config = _tokenConfig[token];
@@ -154,14 +158,27 @@ contract Faucet is Ownable2Step, AccessControl, ReentrancyGuard, Pausable {
         return uint256(nextDay) * DAY;
     }
 
-    function perClaim(address token) external view returns (uint256) { return _tokenConfig[token].perClaim; }
-    function cooldownSec() external view returns (uint256) { return uint256(_cooldownDays) * DAY; }
-    function treasury() external view returns (address) { return _treasury; }
+    function perClaim(address token) external view returns (uint256) {
+        return _tokenConfig[token].perClaim;
+    }
+
+    function cooldownSec() external view returns (uint256) {
+        return uint256(_cooldownDays) * DAY;
+    }
+
+    function treasury() external view returns (address) {
+        return _treasury;
+    }
 
     // ===== 通行证（当日有效） =====
 
-    function paidPassEnabled() external view returns (bool) { return _paidPassEnabled; }
-    function passPriceEth() external view returns (uint256) { return _passPriceEth; }
+    function paidPassEnabled() external view returns (bool) {
+        return _paidPassEnabled;
+    }
+
+    function passPriceEth() external view returns (uint256) {
+        return _passPriceEth;
+    }
 
     /// @notice 查询地址是否拥有当日通行证
     function hasActivePass(address account) external view returns (bool) {
@@ -182,7 +199,7 @@ contract Faucet is Ownable2Step, AccessControl, ReentrancyGuard, Pausable {
         _passValidDayPlusOne[msg.sender] = uint64(currentDay + 1);
 
         if (msg.value > price) {
-            (bool success, ) = msg.sender.call{value: msg.value - price}("");
+            (bool success,) = msg.sender.call{value: msg.value - price}("");
             if (!success) revert("PASS_REFUND_FAIL"); // 整笔回滚，状态与资金都不变
         }
 
@@ -224,8 +241,13 @@ contract Faucet is Ownable2Step, AccessControl, ReentrancyGuard, Pausable {
 
     // ===== 风控：黑名单 =====
 
-    function blacklistEnabled() external view returns (bool) { return _blacklistEnabled; }
-    function isBlacklisted(address account) external view returns (bool) { return _blacklisted[account]; }
+    function blacklistEnabled() external view returns (bool) {
+        return _blacklistEnabled;
+    }
+
+    function isBlacklisted(address account) external view returns (bool) {
+        return _blacklisted[account];
+    }
 
     function setBlacklistEnabled(bool enabled) external onlyOwner {
         _blacklistEnabled = enabled;
@@ -246,7 +268,7 @@ contract Faucet is Ownable2Step, AccessControl, ReentrancyGuard, Pausable {
         if (treasury_ == address(0)) revert("TREASURY_UNSET");
         if (amount == 0 || amount > address(this).balance) revert("SWEEP_ETH_INVALID");
 
-        (bool success, ) = treasury_.call{value: amount}("");
+        (bool success,) = treasury_.call{value: amount}("");
         if (!success) revert("SWEEP_ETH_FAIL");
 
         emit FundsSwept(address(0), treasury_, amount);
@@ -267,6 +289,4 @@ contract Faucet is Ownable2Step, AccessControl, ReentrancyGuard, Pausable {
         IERC20(token).safeTransfer(treasury_, amount);
         emit FundsSwept(token, treasury_, amount);
     }
-
-
 }

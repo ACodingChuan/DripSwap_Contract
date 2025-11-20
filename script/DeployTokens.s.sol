@@ -80,5 +80,4 @@ contract DeployTokens is DeployBase {
         tokens[5] = TokenInfo("Virtual Chainlink", "vLINK", 18, 1_000_000 ether);
         tokens[6] = TokenInfo("Virtual Scroll", "vSCR", 18, 2_000_000 ether);
     }
-
 }

@@ -28,7 +28,7 @@ contract GuardedRouterTest is Test {
         oracle.setPairPrice(BASE, QUOTE, 2e18, block.timestamp, IOracleRouter.PriceSrc.UsdSplit);
     }
 
-    function testCheckPriceNowHappyPath()  view public {
+    function testCheckPriceNowHappyPath() public view {
         (uint256 dexMid, uint256 oraclePx, uint256 ts, bool stale, uint16 limit, bool fixedSrc) =
             guard.checkPriceNow(BASE, QUOTE);
         assertEq(dexMid, 2e18, "dex mid");
@@ -41,7 +41,7 @@ contract GuardedRouterTest is Test {
 
     function testCheckPriceNowFixedSourceUsesRelaxedLimit() public {
         oracle.setPairPrice(BASE, QUOTE, 2e18, block.timestamp, IOracleRouter.PriceSrc.Fixed);
-        (, , , , uint16 limit, bool fixedSrc) = guard.checkPriceNow(BASE, QUOTE);
+        (,,,, uint16 limit, bool fixedSrc) = guard.checkPriceNow(BASE, QUOTE);
         assertTrue(fixedSrc, "src fixed");
         assertEq(limit, 800, "fixed limit uses hardBpsFixed");
     }
@@ -60,7 +60,7 @@ contract GuardedRouterTest is Test {
         assertFalse(fixedSrc, "still USD split source");
     }
 
-    function testCheckSwapExactInWithinThresholdOk() view public {
+    function testCheckSwapExactInWithinThresholdOk() public view {
         address[] memory path = new address[](2);
         path[0] = BASE;
         path[1] = QUOTE;
@@ -112,7 +112,7 @@ contract GuardedRouterTest is Test {
         assertEq(oraclePx, 2e18, "oracle returned");
     }
 
-    function testCheckSwapExactOutReturnsInAmount() view public {
+    function testCheckSwapExactOutReturnsInAmount() public view {
         address[] memory path = new address[](2);
         path[0] = BASE;
         path[1] = QUOTE;
@@ -126,7 +126,7 @@ contract GuardedRouterTest is Test {
         assertGt(amountIn, 0, "amount in computed");
     }
 
-    function testCheckSwapExactOutFailsWhenAmountExceedsReserves() view public {
+    function testCheckSwapExactOutFailsWhenAmountExceedsReserves() public view {
         (bool ok, uint256 devBps, uint256 limit, bool stale, uint256 dexAfter, uint256 oraclePx, uint256 amountIn) =
             guard.checkSwapExactOut(_path(BASE, QUOTE), 2_000_000);
         assertFalse(ok, "should fail");
@@ -245,7 +245,7 @@ contract GuardedRouterTest is Test {
         guard.setOracleRouter(address(newOracle));
         oracle = newOracle;
         oracle.setPairPrice(BASE, QUOTE, 2e18, block.timestamp, IOracleRouter.PriceSrc.UsdSplit);
-        (bool ok,, , , ,) = guard.checkSwapExactIn(_path(BASE, QUOTE), 5_000);
+        (bool ok,,,,,) = guard.checkSwapExactIn(_path(BASE, QUOTE), 5_000);
         assertTrue(ok, "still functional after router switch");
     }
 
@@ -294,8 +294,8 @@ contract GuardedRouterTest is Test {
         guard.checkSwapExactIn(bad, 10_000);
     }
 
-    function testCheckPriceNowReturnsZeroWhenNoPair()  view public {
-        (uint256 dex,, , bool stale,,) = guard.checkPriceNow(BASE, address(0xDEAD));
+    function testCheckPriceNowReturnsZeroWhenNoPair() public view {
+        (uint256 dex,,, bool stale,,) = guard.checkPriceNow(BASE, address(0xDEAD));
         assertEq(dex, 0);
         assertTrue(stale);
     }

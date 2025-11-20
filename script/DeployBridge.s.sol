@@ -15,6 +15,7 @@ contract DeployBridge is DeployBase {
         address router;
         address linkToken;
         uint64 chainSelector;
+        address permit2;
     }
 
     function run() external {
@@ -28,12 +29,13 @@ contract DeployBridge is DeployBase {
         console2.log("Router:", cfg.router);
         console2.log("LINK Token:", cfg.linkToken);
         console2.log("Chain Selector:", cfg.chainSelector);
+        console2.log("Permit2:", cfg.permit2);
 
         vm.startBroadcast();
         address deployer = msg.sender;
 
         // 2) 部署 Bridge
-        (address bridge, bool fresh) = _deployBridge(deployer, cfg.router, cfg.linkToken);
+        (address bridge, bool fresh) = _deployBridge(deployer, cfg.router, cfg.linkToken, cfg.permit2);
 
         // 3) 配置基础参数（如果是新部署）
         if (fresh) {
@@ -47,6 +49,7 @@ contract DeployBridge is DeployBase {
         _bookSetAddress("bridge.router", cfg.router);
         _bookSetAddress("bridge.link", cfg.linkToken);
         _bookSetUint("bridge.chain_selector", cfg.chainSelector);
+        _bookSetAddress("bridge.permit2", cfg.permit2);
 
         if (fresh) {
             string memory mdPath = _deploymentFile("bridge.md");
@@ -56,21 +59,19 @@ contract DeployBridge is DeployBase {
             vm.writeLine(mdPath, string.concat("  router: ", vm.toString(cfg.router)));
             vm.writeLine(mdPath, string.concat("  link_token: ", vm.toString(cfg.linkToken)));
             vm.writeLine(mdPath, string.concat("  chain_selector: ", vm.toString(cfg.chainSelector)));
+            vm.writeLine(mdPath, string.concat("  permit2: ", vm.toString(cfg.permit2)));
             vm.writeLine(mdPath, string.concat("  admin: ", vm.toString(deployer)));
         }
 
         console2.log("[DONE] DeployBridge completed");
     }
 
-    function _deployBridge(
-        address admin,
-        address router,
-        address linkToken
-    ) internal returns (address deployed, bool freshly) {
-        bytes memory initCode = abi.encodePacked(
-            type(Bridge).creationCode,
-            abi.encode(admin, router, linkToken)
-        );
+    function _deployBridge(address admin, address router, address linkToken, address permit2)
+        internal
+        returns (address deployed, bool freshly)
+    {
+        bytes memory initCode =
+            abi.encodePacked(type(Bridge).creationCode, abi.encode(admin, router, linkToken, permit2));
 
         bytes32 salt = keccak256(abi.encodePacked("DripSwap::Bridge"));
         (deployed, freshly) = _deployDeterministic(initCode, salt);
@@ -107,5 +108,6 @@ contract DeployBridge is DeployBase {
         c.router = raw.readAddress(".router");
         c.linkToken = raw.readAddress(".link_token");
         c.chainSelector = uint64(raw.readUint(".chain_selector"));
+        c.permit2 = raw.readAddress(".permit2");
     }
 }

@@ -6,7 +6,7 @@
     }
   },
   "lib/chainlink-ccip": {
-    "rev": "a872697a2d66af9143fefd4caa47376e41aa8f6a"
+    "rev": "279b542"
   },
   "lib/chainlink-local": {
     "tag": {
