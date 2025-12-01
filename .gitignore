@@ -32,7 +32,14 @@ coverage-html
 # ABI files (ignored - can be regenerated from source)
 abi/
 # Foundry dependencies (IMPORTANT: prevents indexing 6000+ files)
-lib/
+lib/*
+!lib/chainlink-brownie-contracts/
+!lib/chainlink-ccip/
+!lib/forge-std/
+!lib/openzeppelin-contracts/
+!lib/openzeppelin-contracts-upgradeable/
+!lib/v2-core/
+!lib/v2-periphery/
 
 # Node.js
 node_modules/

@@ -1,0 +1,53 @@
+{
+  "tokens": [
+    {
+      "symbol": "vETH",
+      "localToken": "0xE91d02E66a9152Fee1BC79c1830121F6507a4F6D",
+      "localPool": "0xfE81DBC7ec3AE383a7535f5aFAe817621f2f0e34",
+      "remoteToken": "0xE91d02E66a9152Fee1BC79c1830121F6507a4F6D",
+      "remotePool": "0xC98b1819AADeC0fB30B74DeBef02469dc5FBd460"
+    },
+    {
+      "symbol": "vUSDT",
+      "localToken": "0xBAcDBe38Df8421d0AA90262BEB1C20d32a634fe7",
+      "localPool": "0x7E4E689a73e6ffAE9B761148926d3fAD3664f116",
+      "remoteToken": "0xBAcDBe38Df8421d0AA90262BEB1C20d32a634fe7",
+      "remotePool": "0xb9046B13780bEcB64A4c0D0263Aa51A8dA34437b"
+    },
+    {
+      "symbol": "vUSDC",
+      "localToken": "0x46A906fcA4487C87f0d89D2d0824EC57bdAa947D",
+      "localPool": "0xA9CceE83eA56AEB484Cf72b90FA81392719cEcab",
+      "remoteToken": "0x46A906fcA4487C87f0d89D2d0824EC57bdAa947D",
+      "remotePool": "0xAdE641AB716A4c74F69FAB530CAA5848e9B172A9"
+    },
+    {
+      "symbol": "vDAI",
+      "localToken": "0x0C156E2F45a812ad743760A88d73fB22879BC299",
+      "localPool": "0xF774dC8f6D0c92e6cB2E0260dCc720c5E1571d31",
+      "remoteToken": "0x0C156E2F45a812ad743760A88d73fB22879BC299",
+      "remotePool": "0x9BD15faC563c470E64B6D4917E2f79d1960a3cA0"
+    },
+    {
+      "symbol": "vBTC",
+      "localToken": "0xAeA8C2F08b10Fe1853300dF4332E462b449e19D6",
+      "localPool": "0x0Ee1e426b2DCE06a34DF8f23463e2559F75ba880",
+      "remoteToken": "0xAeA8C2F08b10Fe1853300dF4332E462b449e19D6",
+      "remotePool": "0xf508fF4a3BccC4284E817A0c7d43604c2aabfC70"
+    },
+    {
+      "symbol": "vLINK",
+      "localToken": "0x1A95d5d1930b807B62B20f3cA6b2451Ffc75B454",
+      "localPool": "0x4BE437a25237C511d316a8c8Bc594b422abAd2d1",
+      "remoteToken": "0x1A95d5d1930b807B62B20f3cA6b2451Ffc75B454",
+      "remotePool": "0xc780c0Df0dF908fc118296Ac62798E321A7BA64e"
+    },
+    {
+      "symbol": "vSCR",
+      "localToken": "0x4911Fb3923F6DA0cd4920F914991B0A742d88Bfd",
+      "localPool": "0xf985F69e6bE82F3EDeF82A2FE256b0eF4d114bd0",
+      "remoteToken": "0x4911Fb3923F6DA0cd4920F914991B0A742d88Bfd",
+      "remotePool": "0x727db78a67D46871a0d9EF2eA33be5e1e53F59A0"
+    }
+  ]
+}

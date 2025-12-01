@@ -753,10 +753,262 @@ source .env.sepolia && cast call 0x9347B320e42877855Cc6E66e5E5d6f18216CEEe7 \
 **查看 CCIP 消息状态**：
 访问 [Chainlink CCIP Explorer](https://ccip.chain.link/) 并输入 Message ID
 
+
+## 🌏 自定义 CCIP 跨链配置全流程指南
+
+本指南详细记录了配置 Chainlink CCIP BurnMint 跨链池所需的完整步骤。由于手动配置极易出错且流程繁琐，建议后续通过脚本实现自动化。
+
+### 1. 核心角色与架构
+
+配置涉及以下五个关键合约组件的交互：
+
+1.  **BurnMintERC20**: 支持跨链的 Token（如 vETH, vUSDT）。需要将 `mint/burn` 权限授予 `BurnMintTokenPool`。
+2.  **BurnMintTokenPool**: 负责锁定/销毁源链 Token 并通知 CCIP，或接收 CCIP 消息并解锁/铸造目标链 Token。
+3.  **RegistryModuleOwnerCustom**: 用于向 TokenAdminRegistry 注册 Token 的管理权限。
+4.  **TokenAdminRegistry**: Chainlink 官方维护的注册表，用于管理 Token 与 Pool 的绑定关系。
+5.  **Bridge**: DripSwap 自建的桥接路由合约，负责前端交互和费用估算。
+
+### 2. 环境配置与地址
+
+#### Scroll Sepolia (Chain ID: 534351)
+*   **Chain Selector**: `2279865765895943307`
+*   **RMN Proxy**: `0x8f4413e02265F65eF89FB908dbA2915fF9f7F8cB`
+*   **Router**: `0x6aF501292f2A33C81B9156203C9A66Ba0d8E3D21`
+*   **TokenAdminRegistry**: `0xf49C561cf56149517c67793a3035D1877ffE2f04`
+*   **RegistryModuleOwner**: `0x3325786a3eE3Aa488403A136CF9Ad3E764656C75`
+*   **LINK Token**: `0x231d45b53C905c3d6201318156BDC725c9c3B9B1`
+
+#### Sepolia (Chain ID: 11155111)
+*   **Chain Selector**: `16015286601757825753`
+*   **RMN Proxy**: `0xba3f6251de62dED61Ff98590cB2fDf6871FbB991`
+*   **Router**: `0x0BF3dE8c5D3e8A2B34D2BEeB17ABfCeBaf363A59`
+*   **TokenAdminRegistry**: `0x95F29FEE11c5C55d26cCcf1DB6772DE953B37B82`
+*   **RegistryModuleOwner**: `0x62e731218d0D47305aba2BE3751E7EE9E5520790`
+*   **LINK Token**: `0x779877A7B0D9E8603169DdbD7836e478b4624789`
+
+### 3. 详细配置步骤 (针对每个 Token)
+
+对于每个需要跨链的 Token（例如 vETH），需要在**每条链**上执行以下步骤：
+
+#### 步骤 A: 权限注册 (TokenAdminRegistry)
+1.  **获取 Admin 权限**：
+    调用 `RegistryModuleOwnerCustom.registerAdminViaGetCCIPAdmin(tokenAddress)`。
+    *   *作用*：申明当前 EOA 是该 Token 的管理员（前提是 Token 合约实现了 `getCCIPAdmin()` 接口并指向该 EOA）。
+2.  **接受 Admin 角色**：
+    调用 `TokenAdminRegistry.acceptAdminRole(tokenAddress)`。
+    *   *作用*：在注册表中正式接管 Token 的管理权。
+
+#### 步骤 B: 绑定 Pool (TokenAdminRegistry)
+1.  **设置 Pool**：
+    调用 `TokenAdminRegistry.setPool(tokenAddress, poolAddress)`。
+    *   *作用*：告诉 Chainlink 网络，该 Token 在本链上的跨链操作由哪个 Pool 合约负责。
+
+#### 步骤 C: 配置远程链 (BurnMintTokenPool)
+1.  **应用链更新 (Apply Chain Updates)**：
+    调用 `BurnMintTokenPool.applyChainUpdates(remoteChainSelectorsToRemove, chainsToAdd)`。
+    *   这是最复杂的一步，需要构造复杂的 Tuple 结构来指定：
+        *   目标链的 Chain Selector。
+        *   目标链上的 Token 地址（bytes 编码）。
+        *   目标链上的 Pool 地址（bytes 编码）。
+        *   出站/入站速率限制（Rate Limiter Config）。
+
+    **`chainsToAdd` 参数结构示例**：
+    ```solidity
+    struct ChainUpdate {
+        uint64 remoteChainSelector; // 目标链 Selector
+        bool allowed;               // 是否允许通信 (虽然ABI中可能是 bytes[] remotePoolAddresses 等，具体看各版本实现，标准CCIP v1.5通常如下)
+        bytes outboundToken;        // 目标链 Token 地址 (abi.encodePacked)
+        bytes outboundPool;         // 目标链 Pool 地址 (abi.encodePacked)
+        RateLimiterConfig outbound; // 出站限速
+        RateLimiterConfig inbound;  // 入站限速
+    }
+    ```
+    *(注：具体 ABI 请参考下文折叠部分)*
+
+#### 步骤 D: DripSwap Bridge 配置
+1.  **注册 Pool**：
+    调用 DripSwap `Bridge.registerTokenPool(tokenAddress, poolAddress)`。
+    *   *作用*：让 Bridge 合约知道通过哪个 Pool 去 burn/mint 该 Token。
+2.  **设置 Allowlist (可选)**：
+    如果 Pool 开启了 Allowlist，需要将 Bridge 合约地址加入 Pool 的允许列表。
+
+---
+
+### 4. 自动化脚本编写思路 (Scripting Plan)
+
+为了避免重复的手工操作和潜在的人为错误，建议编写一个 Foundry Script (`ConfigureCCIP.s.sol`) 来自动化上述流程。
+
+#### 设计思路
+脚本应设计为幂等（Idempotent），即重复运行不会导致错误配置。
+
+**脚本输入**：
+*   `config.json`: 包含各链的 Router, Registry, Chain Selector 等基础设施地址。
+*   `address_book.md`: 读取当前已部署的 Token 和 Pool 地址。
+
+**脚本流程 (run 函数)**：
+1.  **读取环境变量与配置**：确定当前网络（Sepolia 或 Scroll），加载对应的配置参数。
+2.  **加载 Token 列表**：遍历所有已部署的 vToken（vETH, vUSDT 等）。
+3.  **执行配置循环**：
+    对于每个 Token：
+    *   **Check**: 检查是否已在 `TokenAdminRegistry` 注册。
+    *   **Action A**: 若未注册，执行 `registerAdminViaGetCCIPAdmin` 和 `acceptAdminRole`。
+    *   **Check**: 检查 `TokenAdminRegistry` 中的 Pool 是否匹配当前部署的 Pool。
+    *   **Action B**: 若不匹配，执行 `setPool`。
+    *   **Action C**: 调用 `BurnMintTokenPool.applyChainUpdates`。
+        *   *难点*：需要根据目标链（Remote Chain）的 `address_book` 获取对应的 Remote Token 和 Remote Pool 地址。
+        *   *实现*：脚本需要同时读取本地和远程链的地址簿（或硬编码远程地址映射）。
+        *   *参数构造*：使用 `abi.encodePacked(address)` 将地址转换为 bytes。
+    *   **Action D**: 调用本地 Bridge 合约的 `registerTokenPool`。
+
+**关键数据结构构造 (Solidity Script)**：
+```solidity
+// 构造 applyChainUpdates 的参数
+TokenPool.ChainUpdate[] memory chainsToAdd = new TokenPool.ChainUpdate[](1);
+
+// 速率限制配置 (默认不限制)
+RateLimiter.Config memory noLimit = RateLimiter.Config({
+    isEnabled: true,
+    capacity: type(uint128).max,
+    rate: type(uint128).max
+});
+
+chainsToAdd[0] = TokenPool.ChainUpdate({
+    remoteChainSelector: remoteChainSelector,
+    remotePoolAddresses: abi.encode(remotePoolAddress), // 注意：不同版本可能是 bytes[]
+    remoteTokenAddress: abi.encode(remoteTokenAddress),
+    outboundRateLimiterConfig: noLimit,
+    inboundRateLimiterConfig: noLimit
+});
+
+pool.applyChainUpdates(new uint64[](0), chainsToAdd);
+```
+
+---
+
+<details>
+<summary>📂 点击展开：BurnMintTokenPool 完整 ABI 参考</summary>
+
+```json
+[
+  {
+    "inputs": [
+      {
+        "internalType": "contract IBurnMintERC20",
+        "name": "token",
+        "type": "address"
+      },
+      {
+        "internalType": "uint8",
+        "name": "localTokenDecimals",
+        "type": "uint8"
+      },
+      {
+        "internalType": "address[]",
+        "name": "allowlist",
+        "type": "address[]"
+      },
+      {
+        "internalType": "address",
+        "name": "rmnProxy",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "router",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "nonpayable",
+    "type": "constructor"
+  },
+  // ... (其余 ABI 内容保持不变)
+  {
+    "inputs": [
+      {
+        "internalType": "uint64[]",
+        "name": "remoteChainSelectorsToRemove",
+        "type": "uint64[]"
+      },
+      {
+        "components": [
+          {
+            "internalType": "uint64",
+            "name": "remoteChainSelector",
+            "type": "uint64"
+          },
+          {
+            "internalType": "bytes[]",
+            "name": "remotePoolAddresses",
+            "type": "bytes[]"
+          },
+          {
+            "internalType": "bytes",
+            "name": "remoteTokenAddress",
+            "type": "bytes"
+          },
+          {
+            "components": [
+              {
+                "internalType": "bool",
+                "name": "isEnabled",
+                "type": "bool"
+              },
+              {
+                "internalType": "uint128",
+                "name": "capacity",
+                "type": "uint128"
+              },
+              {
+                "internalType": "uint128",
+                "name": "rate",
+                "type": "uint128"
+              }
+            ],
+            "internalType": "struct RateLimiter.Config",
+            "name": "outboundRateLimiterConfig",
+            "type": "tuple"
+          },
+          {
+            "components": [
+              {
+                "internalType": "bool",
+                "name": "isEnabled",
+                "type": "bool"
+              },
+              {
+                "internalType": "uint128",
+                "name": "capacity",
+                "type": "uint128"
+              },
+              {
+                "internalType": "uint128",
+                "name": "rate",
+                "type": "uint128"
+              }
+            ],
+            "internalType": "struct RateLimiter.Config",
+            "name": "inboundRateLimiterConfig",
+            "type": "tuple"
+          }
+        ],
+        "internalType": "struct TokenPool.ChainUpdate[]",
+        "name": "chainsToAdd",
+        "type": "tuple[]"
+      }
+    ],
+    "name": "applyChainUpdates",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  }
+]
+```
+</details>
+
 ---
 
 **调试统计**：
-- ⏱️ 总调试时长: ~4 小时
+- ⏱️ 总调试时长: ~5 小时
 - ❌ 失败交易数: 15+
 - ✅ 成功交易数: 3
 - 🎯 最大的坑: Permit2 签名缺少 spender 字段
