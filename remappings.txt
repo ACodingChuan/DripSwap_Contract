@@ -1,0 +1,7 @@
+@chainlink/contracts/src/v0.8/shared/access/Ownable2Step.sol=src/vendor/chainlink/Ownable2Step.sol
+@chainlink/contracts/src/v0.8/shared/access/Ownable2StepMsgSender.sol=src/vendor/chainlink/Ownable2StepMsgSender.sol
+@chainlink/contracts/src/v0.8/shared/interfaces/IOwnable.sol=src/vendor/chainlink/IOwnable.sol
+@chainlink/contracts/src/v0.8/shared/interfaces/ITypeAndVersion.sol=src/vendor/chainlink/ITypeAndVersion.sol
+@chainlink/contracts/src/v0.8/shared/token/ERC20/IBurnMintERC20.sol=src/vendor/chainlink/IBurnMintERC20.sol
+@chainlink/contracts/=lib/chainlink-brownie-contracts/contracts/
+@chainlink/contracts/src/=lib/chainlink-brownie-contracts/contracts/src/

@@ -5,7 +5,7 @@ import {console2} from "forge-std/console2.sol";
 import {stdJson} from "forge-std/StdJson.sol";
 import {DeployBase} from "script/lib/DeployBase.s.sol";
 import {IBurnMintERC20} from "@chainlink/contracts/src/v0.8/shared/token/ERC20/IBurnMintERC20.sol";
-import {BurnMintTokenPool} from "@chainlink/contracts-ccip/pools/BurnMintTokenPool.sol";
+import {DripBurnMintTokenPool} from "src/vendor/chainlink/DripBurnMintTokenPool.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 
 /// @title DeployBurnMintPools (address_book 驱动版)
@@ -60,7 +60,7 @@ contract DeployBurnMintPools is DeployBase {
                 continue;
             }
 
-            BurnMintTokenPool pool = new BurnMintTokenPool(
+            DripBurnMintTokenPool pool = new DripBurnMintTokenPool(
                 IBurnMintERC20(tokenAddr), IERC20Metadata(tokenAddr).decimals(), allowlist, cfg.rmnProxy, cfg.router
             );
             address poolAddr = address(pool);
